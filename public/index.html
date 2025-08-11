@@ -46,9 +46,34 @@
       const API = urlApi || lsApi || DEFAULT_API;
       if (urlApi) localStorage.setItem("API_BASE", urlApi);
 
-      // WebSocket 연결
-      const socket = io(API, { path: "/socket.io" });
+      console.log("[client] API =", API);
 
+      // WebSocket 연결
+      const socket = io(API, {
+        path: "/socket.io",
+        transports: ["websocket"],
+      });
+
+      socket.on("connect", () => {
+        const statusEl = document.getElementById("status");
+        statusEl.textContent = "연결됨";
+        statusEl.classList.remove("bad");
+        statusEl.classList.add("ok");
+        console.log("[socket] connected:", socket.id);
+      });
+      socket.on("disconnect", () => {
+        const statusEl = document.getElementById("status");
+        statusEl.textContent = "연결 끊김";
+        statusEl.classList.remove("ok");
+        statusEl.classList.add("bad");
+        console.log("[socket] disconnected");
+      });
+
+      // (선택) 헬스체크 로그로 백엔드 통신 확인
+      fetch(`${API}/health`)
+        .then((r) => r.json())
+        .then((j) => console.log("[health]", j))
+        .catch((err) => console.warn("[health error]", err));
       // 만약 fetch를 쓰는 부분이 있다면 이렇게:
       // fetch(`${API}/health`)
       // fetch(`${API}/query_with_embedding`, { ... })

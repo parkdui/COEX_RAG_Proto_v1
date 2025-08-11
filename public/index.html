@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"
+    />
+    <title>COEX RAG Assistant</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="title">COEX 이벤트 안내</div>
+      <div id="status" class="status">연결 확인 중…</div>
+    </header>
+
+    <main id="chat" class="chat"></main>
+
+    <form id="composer" class="composer" autocomplete="off">
+      <input
+        id="q"
+        class="input"
+        type="text"
+        inputmode="search"
+        placeholder="예) 이번 주말 가족 체험 프로그램 추천해줘"
+      />
+      <button class="send" aria-label="보내기">보내기</button>
+    </form>
+
+    <template id="bubble">
+      <div class="bubble">
+        <div class="bubble-inner"></div>
+      </div>
+    </template>
+    <script src="/socket.io/socket.io.js"></script>
+
+    <script>
+      // ---- DOM refs ----
+      const chat = document.getElementById("chat");
+      const form = document.getElementById("composer");
+      const q = document.getElementById("q");
+      const statusEl = document.getElementById("status");
+      const bubbleTpl = document.getElementById("bubble");
+
+      // ---- socket.io ----
+      const socket = io();
+
+      // pending 응답(생각 중…) 버블 참조
+      let pendingBubble = null;
+
+      // ---- UI helpers (기존 유지) ----
+      function addBubble(text, who = "bot", html = false) {
+        const node = bubbleTpl.content.firstElementChild.cloneNode(true);
+        node.classList.add(who);
+        const inner = node.querySelector(".bubble-inner");
+        if (html) inner.innerHTML = text;
+        else inner.textContent = text;
+        chat.appendChild(node);
+        node.scrollIntoView({ behavior: "smooth", block: "end" });
+        return node;
+      }
+
+      function addHits(hits) {
+        if (!hits || !hits.length) return;
+        const lines = hits.map(
+          (h, i) =>
+            `[${i + 1}] ${h?.meta?.title || ""} | ${h?.meta?.date || ""} | ${
+              h?.meta?.venue || ""
+            }`
+        );
+        const details = document.createElement("details");
+        details.className = "hits";
+        const sum = document.createElement("summary");
+        sum.textContent = `참조한 이벤트 (${hits.length})`;
+        details.appendChild(sum);
+        const pre = document.createElement("pre");
+        pre.textContent = lines.join("\n");
+        details.appendChild(pre);
+        chat.appendChild(details);
+        details.scrollIntoView({ behavior: "smooth", block: "end" });
+      }
+
+      // ---- socket events ----
+      socket.on("connect", () => {
+        statusEl.textContent = "연결됨";
+        statusEl.classList.remove("bad");
+        statusEl.classList.add("ok");
+        console.log("[socket] connected:", socket.id);
+      });
+
+      socket.on("disconnect", () => {
+        statusEl.textContent = "연결 끊김";
+        statusEl.classList.remove("ok");
+        statusEl.classList.add("bad");
+        console.log("[socket] disconnected");
+      });
+
+      // 서버에서 `reply` 이벤트로 내려줌
+      // - 문자열: 바로 봇 말풍선
+      // - 객체: { answer, hits } 또는 { error }
+      socket.on("reply", (payload) => {
+        if (pendingBubble) {
+          pendingBubble.remove();
+          pendingBubble = null;
+        }
+
+        if (typeof payload === "string") {
+          addBubble(payload, "bot");
+          return;
+        }
+        if (payload?.error) {
+          addBubble("⚠️ " + payload.error, "bot");
+          return;
+        }
+        addBubble(payload?.answer || "(응답 없음)", "bot");
+        if (payload?.hits) addHits(payload.hits);
+      });
+
+      // ---- form submit → socket.emit ----
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const text = q.value.trim();
+        if (!text) return;
+
+        // 나(사용자) 말풍선
+        addBubble(text, "you");
+        q.value = "";
+
+        // 생각 중…
+        pendingBubble = addBubble("생각 중…", "bot");
+        pendingBubble.classList.add("thinking");
+
+        // 서버로 질문 전송 (WS)
+        socket.emit("message", text);
+      });
+
+      // 모바일/엔터 전송
+      q.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          form.requestSubmit();
+        }
+      });
+
+      // 시작 안내
+      addBubble(
+        "안녕하세요! 원하는 전시나 프로그램을 물어보세요.\n예) 9월 주말 가족 체험 / 비건 페스티벌 / 초등학생 대상 행사",
+        "bot"
+      );
+      q.focus();
+    </script>
+  </body>
+</html>

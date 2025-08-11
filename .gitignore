@@ -1,0 +1,12 @@
+# 환경/비밀키
+.env
+.env.*
+# 빌드 산출물/캐시
+dist/
+build/
+.vercel/
+.netlify/
+# 노드 기본
+node_modules/
+# 데이터(필요 없으면 제외)
+data/vectors.json

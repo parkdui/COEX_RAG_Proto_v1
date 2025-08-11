@@ -11,14 +11,20 @@ require("dotenv").config();
 
 const ALLOWED = [
   "http://localhost:3000",
-  "https://*.vercel.app", // 배포 후 실제 도메인으로 바꿔도 됨
-  "https://*.ngrok.io", // ngrok 쓰면
+  "https://coex-rag-proto-v1.vercel.app",
+  "https://*.ngrok-free.app", // ngrok 쓰면
   "https://coex-backend.onrender.com", // Render/Railway 주소(있다면)
 ];
 
 const http = require("http");
 const { Server } = require("socket.io");
 const app = express();
+app.use(
+  require("cors")({
+    origin: (origin, cb) => cb(null, true), // 데모용: 임시 전체 허용
+    credentials: true,
+  })
+);
 app.use(
   cors({
     origin: (origin, cb) => cb(null, true), // 데모용: 임시로 모두 허용
@@ -30,7 +36,11 @@ app.use(express.static("public"));
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: (origin, cb) => cb(null, true), methods: ["GET", "POST"] },
+  cors: {
+    origin: (origin, cb) => cb(null, true),
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
 });
 
 // ========== ENV 헬퍼 (인라인 주석/공백 제거) ==========

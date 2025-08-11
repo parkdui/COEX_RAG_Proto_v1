@@ -33,7 +33,26 @@
         <div class="bubble-inner"></div>
       </div>
     </template>
-    <script src="/socket.io/socket.io.js"></script>
+
+    <!-- <script src="/socket.io/socket.io.js"></script> -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+      // 기본 백엔드 URL (Render/Railway 같은 고정 주소가 있으면 여기 넣기)
+      const DEFAULT_API = "https://e264926c1c94.ngrok-free.app"; // 임시: ngrok 주소 or 고정 백엔드 주소
+
+      // 편의기능: ?api= 로 오버라이드 가능 + localStorage 저장
+      const urlApi = new URLSearchParams(location.search).get("api");
+      const lsApi = localStorage.getItem("API_BASE");
+      const API = urlApi || lsApi || DEFAULT_API;
+      if (urlApi) localStorage.setItem("API_BASE", urlApi);
+
+      // WebSocket 연결
+      const socket = io(API, { path: "/socket.io" });
+
+      // 만약 fetch를 쓰는 부분이 있다면 이렇게:
+      // fetch(`${API}/health`)
+      // fetch(`${API}/query_with_embedding`, { ... })
+    </script>
 
     <script>
       // ---- DOM refs ----
@@ -44,7 +63,7 @@
       const bubbleTpl = document.getElementById("bubble");
 
       // ---- socket.io ----
-      const socket = io();
+      //   const socket = io();
 
       // pending 응답(생각 중…) 버블 참조
       let pendingBubble = null;

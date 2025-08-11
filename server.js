@@ -9,15 +9,29 @@ const cors = require("cors");
 const csv = require("csv-parser");
 require("dotenv").config();
 
+const ALLOWED = [
+  "http://localhost:3000",
+  "https://*.vercel.app", // 배포 후 실제 도메인으로 바꿔도 됨
+  "https://*.ngrok.io", // ngrok 쓰면
+  "https://coex-backend.onrender.com", // Render/Railway 주소(있다면)
+];
+
 const http = require("http");
 const { Server } = require("socket.io");
 const app = express();
-app.use(cors());
+app.use(
+  cors({
+    origin: (origin, cb) => cb(null, true), // 데모용: 임시로 모두 허용
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(express.static("public"));
 
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server, {
+  cors: { origin: (origin, cb) => cb(null, true), methods: ["GET", "POST"] },
+});
 
 // ========== ENV 헬퍼 (인라인 주석/공백 제거) ==========
 const getEnv = (k, d = "") => {

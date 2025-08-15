@@ -81,6 +81,64 @@
     </script>
 
     <script>
+      function addTokenLine(afterNode, tokens) {
+        const div = document.createElement("div");
+        div.className = "token-line";
+        const { input = 0, output = 0, total = input + output } = tokens || {};
+        div.textContent = `📊 토큰 사용량: 입력 ${input.toLocaleString()} / 출력 ${output.toLocaleString()} / 총 ${total.toLocaleString()}`;
+        // 말풍선 바로 뒤에 꽂기
+        afterNode.insertAdjacentElement("afterend", div);
+        div.scrollIntoView({ behavior: "smooth", block: "end" });
+      }
+
+      function addBotTurn(answerText, tokens, hits) {
+        // ① 턴 래퍼
+        const turn = document.createElement("div");
+        turn.className = "turn";
+        chat.appendChild(turn);
+
+        // ② 봇 말풍선
+        const node = bubbleTpl.content.firstElementChild.cloneNode(true);
+        node.classList.add("bot");
+        node.querySelector(".bubble-inner").textContent =
+          answerText || "(응답 없음)";
+        turn.appendChild(node);
+
+        // ③ 토큰 라인(있으면)
+        if (tokens) {
+          const div = document.createElement("div");
+          div.className = "token-line";
+          const { input = 0, output = 0, total } = tokens || {};
+          const totalSafe = Number.isFinite(total) ? total : input + output;
+          div.textContent =
+            `📊 토큰 사용량: 입력 ${input.toLocaleString()} / ` +
+            `출력 ${output.toLocaleString()} / 총 ${totalSafe.toLocaleString()}`;
+          turn.appendChild(div);
+        }
+
+        // ④ 히츠(있으면) - 같은 턴 안에 붙여주면 흐름이 자연스러움
+        if (hits && hits.length) {
+          const lines = hits.map(
+            (h, i) =>
+              `[${i + 1}] ${h?.meta?.title || ""} | ${h?.meta?.date || ""} | ${
+                h?.meta?.venue || ""
+              }`
+          );
+          const details = document.createElement("details");
+          details.className = "hits";
+          const sum = document.createElement("summary");
+          sum.textContent = `참조한 이벤트 (${hits.length})`;
+          const pre = document.createElement("pre");
+          pre.textContent = lines.join("\n");
+          details.appendChild(sum);
+          details.appendChild(pre);
+          turn.appendChild(details);
+        }
+
+        turn.scrollIntoView({ behavior: "smooth", block: "end" });
+        return turn;
+      }
+
       // ---- DOM refs ----
       const chat = document.getElementById("chat");
       const form = document.getElementById("composer");
@@ -106,25 +164,26 @@
         return node;
       }
 
-      function addHits(hits) {
-        if (!hits || !hits.length) return;
-        const lines = hits.map(
-          (h, i) =>
-            `[${i + 1}] ${h?.meta?.title || ""} | ${h?.meta?.date || ""} | ${
-              h?.meta?.venue || ""
-            }`
-        );
-        const details = document.createElement("details");
-        details.className = "hits";
-        const sum = document.createElement("summary");
-        sum.textContent = `참조한 이벤트 (${hits.length})`;
-        details.appendChild(sum);
-        const pre = document.createElement("pre");
-        pre.textContent = lines.join("\n");
-        details.appendChild(pre);
-        chat.appendChild(details);
-        details.scrollIntoView({ behavior: "smooth", block: "end" });
-      }
+      // function addHits(hits) {
+      //   if (!hits || !hits.length) return;
+      //   const lines = hits.map(
+      //     (h, i) =>
+      //       `[${i + 1}] ${h?.meta?.title || ""} | ${h?.meta?.date || ""} | ${
+      //         h?.meta?.venue || ""
+      //       }`
+      //   );
+
+      //   const details = document.createElement("details");
+      //   details.className = "hits";
+      //   const sum = document.createElement("summary");
+      //   sum.textContent = `참조한 이벤트 (${hits.length})`;
+      //   details.appendChild(sum);
+      //   const pre = document.createElement("pre");
+      //   pre.textContent = lines.join("\n");
+      //   details.appendChild(pre);
+      //   chat.appendChild(details);
+      //   details.scrollIntoView({ behavior: "smooth", block: "end" });
+      // }
 
       // ---- socket events ----
       socket.on("connect", () => {
@@ -158,15 +217,26 @@
           addBubble("⚠️ " + payload.error, "bot");
           return;
         }
-        addBubble(payload?.answer || "(응답 없음)", "bot");
-        if (payload?.hits) addHits(payload.hits);
 
-        // ✅ 토큰 정보 표시
-        if (payload?.tokens) {
-          const { input, output, total } = payload.tokens;
-          const tokenInfoEl = document.getElementById("token-info");
-          tokenInfoEl.textContent = `📊 토큰 사용량: 입력 ${input}, 출력 ${output}, 총 ${total}`;
-        }
+        // 1) 말풍선 DOM을 변수로 받기
+        // const botNode = addBubble(payload?.answer || "(응답 없음)", "bot");
+
+        // // 2) 그 말풍선 "바로 아래"에 토큰 라인 삽입
+        // if (payload?.tokens) {
+        //   addTokenLine(botNode, payload.tokens);
+        // }
+
+        addBotTurn(payload?.answer, payload?.tokens, payload?.hits);
+
+        // addBubble(payload?.answer || "(응답 없음)", "bot");
+        // if (payload?.hits) addHits(payload.hits);
+
+        // // ✅ 토큰 정보 표시
+        // if (payload?.tokens) {
+        //   const { input, output, total } = payload.tokens;
+        //   const tokenInfoEl = document.getElementById("token-info");
+        //   tokenInfoEl.textContent = `📊 토큰 사용량: 입력 ${input}, 출력 ${output}, 총 ${total}`;
+        // }
       });
 
       // ---- form submit → socket.emit ----

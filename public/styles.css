@@ -52,12 +52,19 @@ body {
   flex: 1 1 auto;
 }
 
-.token-info {
+/* .token-info {
   text-align: center;
   font-size: 0.9rem;
   color: #555;
   margin: 6px 0;
+} */
+ 
+.token-line {
+  margin: 6px 12px 10px 12px; /* 말풍선 아래 살짝 들여쓰기 */
+  font-size: 12px;
+  color: #6b7280; /* 회색 */
 }
+
 
 .bubble {
   max-width: 86%;
@@ -166,4 +173,11 @@ body {
 @media (max-width: 480px) {
   .bubble { max-width: 92%; }
   .composer { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+}
+
+.turn {
+  margin: 6px 0 2px 0;
+}
+.turn .bubble {
+  margin-bottom: 4px; /* 버블 바로 아래 토큰 라인이 붙도록 약간 간격 */
 }

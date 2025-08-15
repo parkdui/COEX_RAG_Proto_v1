@@ -303,18 +303,28 @@ async function callClovaChat(messages, opts = {}) {
 
   const chatIn =
     Number(
-      chatUsage.inputTokens ?? json?.promptTokens ?? chatUsage.promptTokens ?? 0
+      chatUsage.inputTokens ??
+        json?.result?.inputLength ??
+        json?.promptTokens ??
+        chatUsage.promptTokens ??
+        0
     ) || 0;
 
   const chatOut =
     Number(
       chatUsage.outputTokens ??
+        json?.result?.outputLength ?? // 👈 폴백
         json?.completionTokens ??
         chatUsage.completionTokens ??
         0
     ) || 0;
 
-  const chatTotal = Number(chatUsage.totalTokens ?? chatIn + chatOut) || 0;
+  const chatTotal =
+    Number(
+      chatUsage.totalTokens ??
+        json?.result?.totalTokens ?? // 혹시 있을 경우
+        chatIn + chatOut
+    ) || 0;
 
   TOKENS.chat_input += chatIn;
   TOKENS.chat_output += chatOut;
@@ -539,13 +549,13 @@ app.post("/query_with_embedding", async (req, res) => {
       },
     ];
 
-    const answer = await callClovaChat(messages, {
+    const result = await callClovaChat(messages, {
       temperature: 0.3,
       maxTokens: 700,
     });
     // 🔹 히스토리 업데이트 (유저 질문 / 모델 응답)
     pushHistory(cid, "user", question);
-    pushHistory(cid, "assistant", answer);
+    pushHistory(cid, "assistant", result.content);
 
     res.json({
       answer: result.content,
@@ -641,14 +651,14 @@ io.on("connection", (socket) => {
       ];
 
       // 5) LLM 호출
-      const answer = await callClovaChat(messages, {
+      const result = await callClovaChat(messages, {
         temperature: 0.3,
         maxTokens: 700,
       });
 
       // 6) 히스토리 업데이트
       pushHistory(socket.id, "user", q);
-      pushHistory(socket.id, "assistant", answer);
+      pushHistory(socket.id, "assistant", result.content);
 
       // 7) 응답 전송
       socket.emit("reply", {

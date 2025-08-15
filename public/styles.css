@@ -52,6 +52,13 @@ body {
   flex: 1 1 auto;
 }
 
+.token-info {
+  text-align: center;
+  font-size: 0.9rem;
+  color: #555;
+  margin: 6px 0;
+}
+
 .bubble {
   max-width: 86%;
   margin: 10px 12px;

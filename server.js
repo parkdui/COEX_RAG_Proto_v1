@@ -328,9 +328,17 @@ async function callClovaChat(messages, opts = {}) {
     );
   }
   // 응답 형태 호환 처리
-  return (
-    json?.result?.message?.content || json?.choices?.[0]?.message?.content || ""
-  );
+  return {
+    content:
+      json?.result?.message?.content ||
+      json?.choices?.[0]?.message?.content ||
+      "",
+    tokens: {
+      input: chatIn,
+      output: chatOut,
+      total: chatTotal,
+    },
+  };
 }
 
 const { once } = require("events");
@@ -539,7 +547,12 @@ app.post("/query_with_embedding", async (req, res) => {
     pushHistory(cid, "user", question);
     pushHistory(cid, "assistant", answer);
 
-    res.json({ answer, hits: slimHits, conversationId: cid });
+    res.json({
+      answer: result.content,
+      hits: slimHits,
+      conversationId: cid,
+      tokens: result.tokens,
+    });
     logTokenSummary("after query");
   } catch (e) {
     console.error(e);
@@ -638,7 +651,11 @@ io.on("connection", (socket) => {
       pushHistory(socket.id, "assistant", answer);
 
       // 7) 응답 전송
-      socket.emit("reply", { answer, hits: slimHits });
+      socket.emit("reply", {
+        answer: result.content,
+        hits: slimHits,
+        tokens: result.tokens,
+      });
       logTokenSummary("after ws query");
     } catch (e) {
       console.error("[socket message error]", e);

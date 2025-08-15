@@ -14,6 +14,7 @@
       <div class="title">COEX 이벤트 안내</div>
       <div id="status" class="status">연결 확인 중…</div>
     </header>
+    <div id="token-info" class="token-info"></div>
 
     <main id="chat" class="chat"></main>
 
@@ -38,7 +39,7 @@
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
       // 기본 백엔드 URL (Render/Railway 같은 고정 주소가 있으면 여기 넣기)
-      const DEFAULT_API = "https://e264926c1c94.ngrok-free.app"; // 임시: ngrok 주소 or 고정 백엔드 주소
+      const DEFAULT_API = "https://9e39b3c778de.ngrok-free.app"; // 임시: ngrok 주소 or 고정 백엔드 주소
 
       // 편의기능: ?api= 로 오버라이드 가능 + localStorage 저장
       const urlApi = new URLSearchParams(location.search).get("api");
@@ -159,6 +160,13 @@
         }
         addBubble(payload?.answer || "(응답 없음)", "bot");
         if (payload?.hits) addHits(payload.hits);
+
+        // ✅ 토큰 정보 표시
+        if (payload?.tokens) {
+          const { input, output, total } = payload.tokens;
+          const tokenInfoEl = document.getElementById("token-info");
+          tokenInfoEl.textContent = `📊 토큰 사용량: 입력 ${input}, 출력 ${output}, 총 ${total}`;
+        }
       });
 
       // ---- form submit → socket.emit ----

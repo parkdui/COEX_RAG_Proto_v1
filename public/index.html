@@ -13,10 +13,16 @@
     <header class="topbar">
       <div class="title">COEX 이벤트 안내</div>
       <div id="status" class="status">연결 확인 중…</div>
-    </header>
-    <div id="token-info" class="token-info"></div>
+    </header> 
 
-    <main id="chat" class="chat"></main>
+    <div class="main-layout">
+    <!-- 왼쪽: 프롬프트 편집 영역 -->
+    <aside class="sidebar">
+      <h3>System Prompt</h3>
+      <textarea id="system-prompt" rows="12" placeholder="System Prompt 입력"></textarea>
+    </aside>
+
+    <div id="token-info" class="token-info"></div>
 
     <section class="prompt-editor">
       <textarea
@@ -27,6 +33,8 @@
       ></textarea>
     </section>
 
+    <main class="chat-area">
+    <div id="chat" class="chat"></div>
     <form id="composer" class="composer" autocomplete="off">
       <input
         id="q"
@@ -37,6 +45,7 @@
       />
       <button class="send" aria-label="보내기">보내기</button>
     </form>
+    </main>
 
     <template id="bubble">
       <div class="bubble">

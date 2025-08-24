@@ -100,6 +100,10 @@ const systemPrompt = fs.readFileSync(
   path.join(__dirname, "LLM", "system_prompt.txt"),
   "utf8"
 );
+
+// --- systemPrompt 기본값 저장 (fallback) ---
+let defaultSystemPrompt = systemPrompt;
+
 // ---- Conversation Memory ----
 const chatHistories = new Map();
 const MAX_HISTORY = parseInt(getEnv("MAX_HISTORY", "20"), 10);
@@ -500,6 +504,11 @@ app.post("/query_with_embedding", async (req, res) => {
           "vectors.json not found. Run /pre_processing_for_embedding first.",
       });
     }
+    // 🟢 새 systemPrompt 처리
+    const activeSystemPrompt =
+      (req.body?.systemPrompt && req.body.systemPrompt.trim()) ||
+      defaultSystemPrompt;
+
     const cid = getCid(req); // ← 추가
     const prev = chatHistories.get(cid) || []; // ← 추가
 
@@ -539,7 +548,7 @@ app.post("/query_with_embedding", async (req, res) => {
     const messages = [
       {
         role: "system",
-        content: systemPrompt,
+        content: activeSystemPrompt,
       },
       ...prev, // ← 추가 (대화 맥락)
 
@@ -603,6 +612,10 @@ io.on("connection", (socket) => {
         });
       }
 
+      const activeSystemPrompt =
+        (payload.systemPrompt && payload.systemPrompt.trim()) ||
+        defaultSystemPrompt;
+
       const vectors = JSON.parse(fs.readFileSync(VECTORS_JSON, "utf8"));
       if (!Array.isArray(vectors) || vectors.length === 0) {
         return socket.emit("reply", {
@@ -642,7 +655,7 @@ io.on("connection", (socket) => {
       // 4) 이전 히스토리 포함 메시지 구성
       const prev = chatHistories.get(socket.id) || [];
       const messages = [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: activeSystemPrompt },
         ...prev,
         {
           role: "user",

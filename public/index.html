@@ -18,6 +18,15 @@
 
     <main id="chat" class="chat"></main>
 
+    <section class="prompt-editor">
+      <textarea
+        id="system-prompt"
+        rows="6"
+        style="width: 100%"
+        placeholder="System Prompt를 입력하세요"
+      ></textarea>
+    </section>
+
     <form id="composer" class="composer" autocomplete="off">
       <input
         id="q"
@@ -140,6 +149,7 @@
       }
 
       // ---- DOM refs ----
+      const promptBox = document.getElementById("system-prompt");
       const chat = document.getElementById("chat");
       const form = document.getElementById("composer");
       const q = document.getElementById("q");
@@ -163,27 +173,6 @@
         node.scrollIntoView({ behavior: "smooth", block: "end" });
         return node;
       }
-
-      // function addHits(hits) {
-      //   if (!hits || !hits.length) return;
-      //   const lines = hits.map(
-      //     (h, i) =>
-      //       `[${i + 1}] ${h?.meta?.title || ""} | ${h?.meta?.date || ""} | ${
-      //         h?.meta?.venue || ""
-      //       }`
-      //   );
-
-      //   const details = document.createElement("details");
-      //   details.className = "hits";
-      //   const sum = document.createElement("summary");
-      //   sum.textContent = `참조한 이벤트 (${hits.length})`;
-      //   details.appendChild(sum);
-      //   const pre = document.createElement("pre");
-      //   pre.textContent = lines.join("\n");
-      //   details.appendChild(pre);
-      //   chat.appendChild(details);
-      //   details.scrollIntoView({ behavior: "smooth", block: "end" });
-      // }
 
       // ---- socket events ----
       socket.on("connect", () => {
@@ -253,8 +242,11 @@
         pendingBubble = addBubble("생각 중…", "bot");
         pendingBubble.classList.add("thinking");
 
-        // 서버로 질문 전송 (WS)
-        socket.emit("message", text);
+        // 서버로 질문 전송 (systemPrompt 포함)
+        socket.emit("message", {
+          question: text,
+          systemPrompt: promptBox.value,
+        });
       });
 
       // 모바일/엔터 전송

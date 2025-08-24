@@ -22,7 +22,45 @@ body {
   -webkit-font-smoothing: antialiased;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  /* align-items: center; */
+  align-items: stretch;
+}
+
+/* 메인 레이아웃: 좌측 사이드바 + 우측 채팅 */
+.main-layout {
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 1200px; /* 채팅 너비보다 넉넉하게 */
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+/* 왼쪽 사이드바 */
+.sidebar {
+  flex: 0 0 280px; /* 고정 너비 */
+  background: var(--panel);
+  border-right: 1px solid #23262c;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+.sidebar h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.sidebar textarea {
+  flex: 1;
+  resize: none;
+  width: 100%;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid #262a31;
+  background: #0f1115;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .topbar {
@@ -43,6 +81,15 @@ body {
 .topbar .status { font-size: 12px; color: var(--muted); }
 .topbar .status.ok { color: var(--accent); }
 .topbar .status.bad { color: var(--danger); }
+
+/* 오른쪽 채팅 영역 */
+.chat-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
 
 .chat {
   width: 100%;
@@ -124,7 +171,8 @@ body {
 }
 
 .composer {
-  position: fixed;
+  /* position: fixed; */
+  position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
@@ -138,6 +186,7 @@ body {
   border-top: 1px solid #23262c;
   z-index: 3;
 }
+
 .input {
   width: 100%;
   font-size: 16px;

@@ -13,45 +13,50 @@
     <header class="topbar">
       <div class="title">COEX 이벤트 안내</div>
       <div id="status" class="status">연결 확인 중…</div>
-    </header> 
+    </header>
 
     <div class="main-layout">
-    <!-- 왼쪽: 프롬프트 편집 영역 -->
-    <aside class="sidebar">
-      <h3>System Prompt</h3>
-      <textarea id="system-prompt" rows="12" placeholder="System Prompt 입력"></textarea>
-    </aside>
+      <!-- 왼쪽: 프롬프트 편집 영역 -->
+      <aside class="sidebar">
+        <h3>System Prompt</h3>
+        <textarea
+          id="system-prompt"
+          rows="12"
+          placeholder="System Prompt 입력"
+        ></textarea>
+      </aside>
 
-    <div id="token-info" class="token-info"></div>
+      <div id="token-info" class="token-info"></div>
 
-    <section class="prompt-editor">
-      <textarea
-        id="system-prompt"
-        rows="6"
-        style="width: 100%"
-        placeholder="System Prompt를 입력하세요"
-      ></textarea>
-    </section>
+      <section class="prompt-editor">
+        <textarea
+          id="system-prompt"
+          rows="6"
+          style="width: 100%"
+          placeholder="System Prompt를 입력하세요"
+        ></textarea>
+      </section>
 
-    <main class="chat-area">
-    <div id="chat" class="chat"></div>
-    <form id="composer" class="composer" autocomplete="off">
-      <input
-        id="q"
-        class="input"
-        type="text"
-        inputmode="search"
-        placeholder="예) 이번 주말 가족 체험 프로그램 추천해줘"
-      />
-      <button class="send" aria-label="보내기">보내기</button>
-    </form>
-    </main>
+      <main class="chat-area">
+        <div id="chat" class="chat"></div>
+        <form id="composer" class="composer" autocomplete="off">
+          <input
+            id="q"
+            class="input"
+            type="text"
+            inputmode="search"
+            placeholder="예) 이번 주말 가족 체험 프로그램 추천해줘"
+          />
+          <button class="send" aria-label="보내기">보내기</button>
+        </form>
+      </main>
 
-    <template id="bubble">
-      <div class="bubble">
-        <div class="bubble-inner"></div>
-      </div>
-    </template>
+      <template id="bubble">
+        <div class="bubble">
+          <div class="bubble-inner"></div>
+        </div>
+      </template>
+    </div>
 
     <!-- <script src="/socket.io/socket.io.js"></script> -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>

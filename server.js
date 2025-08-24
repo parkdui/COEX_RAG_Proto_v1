@@ -79,19 +79,20 @@ let CLOVA_BASE = getEnv(
   "CLOVA_API_BASE",
   "https://clovastudio.apigw.ntruss.com"
 );
+
 const CLOVA_KEY = getEnv("CLOVA_API_KEY");
-const CLOVA_MODEL = getEnv("CLOVA_MODEL", "HCX-003");
+const CLOVA_MODEL = getEnv("CLOVA_MODEL", "HCX-005");
 // stream 도메인이면 apigw로 교체 (non-stream 호출 기준)
-if (/clovastudio\.stream\.ntruss\.com/.test(CLOVA_BASE)) {
-  CLOVA_BASE = CLOVA_BASE.replace(
-    "clovastudio.stream.ntruss.com",
-    "clovastudio.apigw.ntruss.com"
-  );
-}
-// /testapp|/serviceapp 경로 없으면 붙이기
-if (!/\/(testapp|serviceapp)(\/|$)/.test(CLOVA_BASE)) {
-  CLOVA_BASE = CLOVA_BASE.replace(/\/$/, "") + "/" + APP_ID;
-}
+// if (/clovastudio\.stream\.ntruss\.com/.test(CLOVA_BASE)) {
+//   CLOVA_BASE = CLOVA_BASE.replace(
+//     "clovastudio.stream.ntruss.com",
+//     "clovastudio.apigw.ntruss.com"
+//   );
+// }
+// // /testapp|/serviceapp 경로 없으면 붙이기
+// if (!/\/(testapp|serviceapp)(\/|$)/.test(CLOVA_BASE)) {
+//   CLOVA_BASE = CLOVA_BASE.replace(/\/$/, "") + "/" + APP_ID;
+// }
 
 // 파일 경로
 const DATA_CSV = path.join(__dirname, "data", "event_lists.csv");
@@ -275,24 +276,35 @@ async function segmentText(text) {
   return Array.isArray(json?.segments) ? json.segments : [text];
 }
 
-// ====== CLOVA Chat Completions (non-stream) ======
+// ====== CLOVA Chat Completions v3 (non-stream) ======
 async function callClovaChat(messages, opts = {}) {
-  const url = `${CLOVA_BASE}/v1/chat-completions/${CLOVA_MODEL}`;
+  const url = `${CLOVA_BASE}/v3/chat-completions/${CLOVA_MODEL}`;
+
+  // ✅ 메시지 포맷 변환
+  const wrappedMessages = messages.map((m) => ({
+    role: m.role,
+    content: [{ type: "text", text: m.content }],
+  }));
+
   const body = {
-    messages, // [{role, content}]
+    messages: wrappedMessages,
     temperature: opts.temperature ?? 0.3,
     topP: opts.topP ?? 0.8,
     topK: opts.topK ?? 0,
     maxTokens: opts.maxTokens ?? 700,
-    repeatPenalty: opts.repeatPenalty ?? 5.0,
-    stopBefore: opts.stopBefore ?? [],
+    repeatPenalty: opts.repeatPenalty ?? 1.1,
+    stop: [],
   };
+  // 🟢 여기서 요청 바디 전체 로그 찍기
+  console.log("📝 [CLOVA Chat Request Body]:", JSON.stringify(body, null, 2));
+
   const res = await fetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${CLOVA_KEY}`,
       "Content-Type": "application/json; charset=utf-8",
       "X-NCP-CLOVASTUDIO-REQUEST-ID": `req-${Date.now()}`,
+      Accept: "application/json",
     },
     body: JSON.stringify(body),
   });
@@ -303,32 +315,14 @@ async function callClovaChat(messages, opts = {}) {
   const json = await res.json();
 
   // ----- add: chat token usage logging -----
-  const chatUsage = json?.result?.usage ?? json?.usage ?? {};
+  const chatUsage =
+    json?.result?.usage || // result 안에 들어오는 경우
+    json?.usage ||
+    {}; // 최상위에 오는 경우
 
-  const chatIn =
-    Number(
-      chatUsage.inputTokens ??
-        json?.result?.inputLength ??
-        json?.promptTokens ??
-        chatUsage.promptTokens ??
-        0
-    ) || 0;
-
-  const chatOut =
-    Number(
-      chatUsage.outputTokens ??
-        json?.result?.outputLength ?? // 👈 폴백
-        json?.completionTokens ??
-        chatUsage.completionTokens ??
-        0
-    ) || 0;
-
-  const chatTotal =
-    Number(
-      chatUsage.totalTokens ??
-        json?.result?.totalTokens ?? // 혹시 있을 경우
-        chatIn + chatOut
-    ) || 0;
+  const chatIn = Number(chatUsage.promptTokens ?? 0);
+  const chatOut = Number(chatUsage.completionTokens ?? 0);
+  const chatTotal = Number(chatUsage.totalTokens ?? chatIn + chatOut);
 
   TOKENS.chat_input += chatIn;
   TOKENS.chat_output += chatOut;
@@ -341,11 +335,12 @@ async function callClovaChat(messages, opts = {}) {
         `(acc_total=${TOKENS.chat_total}, calls=${TOKENS.chat_calls})`
     );
   }
+
   // 응답 형태 호환 처리
   return {
     content:
+      json?.result?.message?.content?.[0]?.text || // HCX-005 구조
       json?.result?.message?.content ||
-      json?.choices?.[0]?.message?.content ||
       "",
     tokens: {
       input: chatIn,
@@ -551,12 +546,27 @@ app.post("/query_with_embedding", async (req, res) => {
         content: activeSystemPrompt,
       },
       ...prev, // ← 추가 (대화 맥락)
-
       {
         role: "user",
         content: `질문: ${question}\n\n[참고 가능한 이벤트]\n${context}\n\n위 정보만 사용해 사용자 질문에 답하세요.`,
       },
     ];
+
+    // function wrapMessages(messages) {
+    //   return messages.map((m) => ({
+    //     role: m.role,
+    //     content: [{ type: "text", text: m.content }],
+    //   }));
+    // }
+
+    // const body = {
+    //   messages: wrapMessages(messages),
+    //   temperature: opts.temperature ?? 0.3,
+    //   topP: opts.topP ?? 0.8,
+    //   maxTokens: opts.maxTokens ?? 700,
+    //   repetitionPenalty: 1.1, // 문서 기준 repeatPenalty → repetitionPenalty 이름도 확인
+    //   stop: [],
+    // };
 
     const result = await callClovaChat(messages, {
       temperature: 0.3,
@@ -596,13 +606,18 @@ app.get("/health", (_req, res) => {
     topK: TOP_K,
   });
 });
+
 io.on("connection", (socket) => {
   console.log(`✅ [socket] connected: ${socket.id}`);
   chatHistories.set(socket.id, []);
 
-  socket.on("message", async (question) => {
+  socket.on("message", async (payload) => {
     try {
-      const q = String(question || "").trim();
+      // const q = String(question || "").trim();
+      const q =
+        typeof payload === "string"
+          ? payload
+          : String(payload.question || "").trim();
       if (!q) return socket.emit("reply", { error: "question required" });
 
       if (!fs.existsSync(VECTORS_JSON)) {

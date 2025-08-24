@@ -16,26 +16,19 @@
     </header>
 
     <div class="main-layout">
-      <!-- 왼쪽: 프롬프트 편집 영역 -->
-      <aside class="sidebar">
-        <h3>System Prompt</h3>
-        <textarea
-          id="system-prompt"
-          rows="12"
-          placeholder="System Prompt 입력"
-        ></textarea>
-      </aside>
+      <section class="prompt-editor">
+        <aside class="sidebar">
+          <h3>System Prompt</h3>
+          <textarea
+            id="system-prompt"
+            rows="6"
+            style="width: 100%"
+            placeholder="System Prompt를 입력하세요"
+          ></textarea>
+        </aside>
+      </section>
 
       <div id="token-info" class="token-info"></div>
-
-      <section class="prompt-editor">
-        <textarea
-          id="system-prompt"
-          rows="6"
-          style="width: 100%"
-          placeholder="System Prompt를 입력하세요"
-        ></textarea>
-      </section>
 
       <main class="chat-area">
         <div id="chat" class="chat"></div>

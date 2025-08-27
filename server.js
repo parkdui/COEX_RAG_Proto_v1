@@ -1,4 +1,4 @@
-// COEX RAG 워킹 프로토타입 (HyperCLOVAX 전용)
+// COEX RAG 워킹 프로토타입 (HyperCLOVAX HCX-005 전용)
 // - CSV → 임베딩 저장 → 질의 임베딩 → 로컬 시맨틱 검색 → CLOVA Chat Completions
 
 const fs = require("fs");

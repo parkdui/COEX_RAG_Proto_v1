@@ -1,6 +1,5 @@
 // COEX RAG 워킹 프로토타입 (HyperCLOVAX 전용)
 // - CSV → 임베딩 저장 → 질의 임베딩 → 로컬 시맨틱 검색 → CLOVA Chat Completions
-// - Node 18+ (global fetch 사용)
 
 const fs = require("fs");
 const path = require("path");

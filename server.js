@@ -6,6 +6,8 @@
 // const upload = multer({ dest: "uploads/" }); // 업로드된 음성 임시 저장
 // const request = require("request");
 
+//v.1.2 updated
+
 const fs = require("fs");
 const path = require("path");
 const express = require("express");

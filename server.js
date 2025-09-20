@@ -1,6 +1,11 @@
 // COEX RAG 워킹 프로토타입 (HyperCLOVAX HCX-005 전용)
 // - CSV → 임베딩 저장 → 질의 임베딩 → 로컬 시맨틱 검색 → CLOVA Chat Completions
 
+// ─── STT (CLOVA Speech Recognition) ──────────────────────────────
+// const multer = require("multer");
+// const upload = multer({ dest: "uploads/" }); // 업로드된 음성 임시 저장
+// const request = require("request");
+
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
@@ -46,8 +51,12 @@ const io = new Server(server, {
 const getEnv = (k, d = "") => {
   const v = process.env[k];
   if (!v) return d;
-  return String(v).split("#")[0].trim(); // "value  # comment" → "value"
+  return String(v).split("#")[0].trim();
 };
+
+// ========== CSR & Voice ENV ==========
+const CLOVA_SPEECH_ID = getEnv("CLOVA_SPEECH_CLIENT_ID");
+const CLOVA_SPEECH_SECRET = getEnv("CLOVA_SPEECH_CLIENT_SECRET");
 
 // ========== ENV 로드 & 자동 보정 ==========
 const APP_ID = getEnv("APP_ID", "testapp"); // testapp | serviceapp
@@ -81,17 +90,6 @@ let CLOVA_BASE = getEnv(
 
 const CLOVA_KEY = getEnv("CLOVA_API_KEY");
 const CLOVA_MODEL = getEnv("CLOVA_MODEL", "HCX-005");
-// stream 도메인이면 apigw로 교체 (non-stream 호출 기준)
-// if (/clovastudio\.stream\.ntruss\.com/.test(CLOVA_BASE)) {
-//   CLOVA_BASE = CLOVA_BASE.replace(
-//     "clovastudio.stream.ntruss.com",
-//     "clovastudio.apigw.ntruss.com"
-//   );
-// }
-// // /testapp|/serviceapp 경로 없으면 붙이기
-// if (!/\/(testapp|serviceapp)(\/|$)/.test(CLOVA_BASE)) {
-//   CLOVA_BASE = CLOVA_BASE.replace(/\/$/, "") + "/" + APP_ID;
-// }
 
 // 파일 경로
 const DATA_CSV = path.join(__dirname, "data", "event_lists.csv");

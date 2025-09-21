@@ -181,6 +181,59 @@
         return node;
       }
 
+      // [추가] 시간/요일에 따라 동적인 인사말을 생성하는 함수
+      function getDynamicGreeting() {
+        const now = new Date();
+        const hour = now.getHours(); // 0-23시
+        const day = now.getDay(); // 0:일요일, 1:월요일, ..., 6:토요일
+
+        // 인사말 후보 목록
+        let possibleGreetings = [];
+
+        // 1. 시간에 따른 기본 인사말 추가
+        if (hour >= 5 && hour < 12) {
+          // 오전
+          possibleGreetings.push(
+            "좋은 아침입니다! 오늘 코엑스에서 어떤 즐거운 일을 계획하고 계신가요?",
+            "활기찬 아침이네요! 무엇을 도와드릴까요?",
+            "좋은 아침이에요! 저는 이솔이라고 해요. 오늘 코엑스엔 무슨 일로 오셨나요?"
+          );
+        } else if (hour >= 12 && hour < 18) {
+          // 오후
+          possibleGreetings.push(
+            "편안한 오후입니다. 코엑스에서의 즐거운 시간을 위해 무엇이 궁금하세요?",
+            "점심은 맛있게 드셨나요? 궁금한 점이 있다면 편하게 물어보세요!",
+            "좋은 오후예요! 코엑스 이벤트 안내 AI, 이솔입니다. 무엇을 도와드릴까요?"
+          );
+        } else {
+          // 저녁 및 밤
+          possibleGreetings.push(
+            "어느덧 저녁이네요. 저 이솔과 함께, 오늘 하루의 마무리를 코엑스에서 즐겨보는 건 어때요?",
+            "저녁 시간도 코엑스와 함께! 어떤 행사를 찾고 계신가요?",
+            "안녕하세요! 코엑스 이벤트 안내 AI, 이솔입니다. 무엇을 도와드릴까요?"
+          );
+        }
+
+        // 2. 요일에 따른 특별 인사말 추가
+        if (day === 5) {
+          // 금요일
+          possibleGreetings.push(
+            "신나는 금요일이네요! 주말에 즐길 만한 행사를 찾아보세요."
+          );
+        } else if (day === 0 || day === 6) {
+          // 주말 (일요일 또는 토요일)
+          possibleGreetings.push(
+            "즐거운 주말입니다! 코엑스에서 특별한 추억을 만들어보세요."
+          );
+        }
+
+        // 3. 후보 목록에서 랜덤으로 하나를 선택하여 반환
+        const randomIndex = Math.floor(
+          Math.random() * possibleGreetings.length
+        );
+        return possibleGreetings[randomIndex];
+      }
+
       // ---- socket events ----
       socket.on("connect", () => {
         statusEl.textContent = "연결됨";
@@ -264,11 +317,8 @@
         }
       });
 
-      // 시작 안내
-      addBubble(
-        "안녕하세요! 원하는 전시나 프로그램을 물어보세요.\n예) 9월 주말 가족 체험 / 비건 페스티벌 / 초등학생 대상 행사",
-        "bot"
-      );
+      // [수정] 시작 안내 메시지를 동적으로 생성된 인사말로 교체
+      addBubble(getDynamicGreeting(), "bot");
       q.focus();
     </script>
   </body>

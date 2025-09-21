@@ -441,20 +441,31 @@ async function loadDataFromGoogleSheet() {
 
 // 컬럼 별칭
 const FIELD_ALIASES = {
-  title: [
-    "전시회명",
-    "행사명",
-    "행사명(국문)",
-    "제목",
-    "title",
-    "EventName",
-    "Name",
+  category: ["행사분류", "행사구분"],
+  industry: [
+    "행사분야",
+    "산업군",
+    "산업분야",
+    "카테고리",
+    "분야",
+    "industry",
+    "Category",
   ],
-  date: ["날짜", "기간", "개최기간", "전시기간", "date", "기간(YYYY.MM.DD~)"],
-  venue: ["장소", "전시장", "개최장소", "Hall", "venue"],
-  region: ["지역", "도시", "국가", "region"],
-  month: ["월", "month"],
-  industry: ["산업군", "산업분야", "카테고리", "분야", "industry", "Category"],
+  title: ["행사명"],
+  subtitle: ["행사명(서브타이틀)"],
+  date: ["행사 시작일자", "날짜", "기간", "개최기간", "전시기간", "date"],
+  endDate: ["행사 종료일자"],
+  venue: ["행사 장소", "장소", "전시장", "개최장소", "Hall", "venue"],
+  price: ["입장료"],
+  host: ["주최"],
+  manage: ["주관"],
+  inquiry: ["담당자/공연문의 정보", "단체문의 정보", "예매문의 정보"],
+  site: ["관련 사이트"],
+  ticket: ["티켓 예약"],
+  age: ["추천 연령대", "연령대", "나이"],
+  gender: ["성별"],
+  interest: ["관심사"],
+  job: ["직업"],
 };
 
 function pickByAliases(row, aliases) {
@@ -477,26 +488,89 @@ function pickByAliases(row, aliases) {
 }
 
 function mapRow(r) {
-  const title = pickByAliases(r, FIELD_ALIASES.title);
-  const date = pickByAliases(r, FIELD_ALIASES.date);
-  const venue = pickByAliases(r, FIELD_ALIASES.venue);
-  const region = pickByAliases(r, FIELD_ALIASES.region);
-  const month = pickByAliases(r, FIELD_ALIASES.month);
+  // FIELD_ALIASES에 정의된 모든 키에 대해 값을 추출합니다.
+  const category = pickByAliases(r, FIELD_ALIASES.category);
   const industry = pickByAliases(r, FIELD_ALIASES.industry);
+  const title = pickByAliases(r, FIELD_ALIASES.title);
+  const subtitle = pickByAliases(r, FIELD_ALIASES.subtitle);
+  const startDate = pickByAliases(r, FIELD_ALIASES.date);
+  const endDate = pickByAliases(r, FIELD_ALIASES.endDate);
+  const venue = pickByAliases(r, FIELD_ALIASES.venue);
+  const price = pickByAliases(r, FIELD_ALIASES.price);
+  const host = pickByAliases(r, FIELD_ALIASES.host);
+  const manage = pickByAliases(r, FIELD_ALIASES.manage);
+  const inquiry = pickByAliases(r, FIELD_ALIASES.inquiry);
+  const site = pickByAliases(r, FIELD_ALIASES.site);
+  const ticket = pickByAliases(r, FIELD_ALIASES.ticket);
+  const age = pickByAliases(r, FIELD_ALIASES.age);
+  const gender = pickByAliases(r, FIELD_ALIASES.gender);
+  const interest = pickByAliases(r, FIELD_ALIASES.interest);
+  const job = pickByAliases(r, FIELD_ALIASES.job);
 
-  let baseText = [title, date, venue, region, industry, month && `월:${month}`]
-    .filter(Boolean)
-    .join(" / ");
-
-  // ⚠️ 아무것도 못 찾았으면: 해당 로우의 모든 값을 합쳐서라도 임베딩
-  if (!baseText || baseText.length < 2) {
-    baseText = Object.values(r)
-      .map((v) => String(v || "").trim())
-      .filter(Boolean)
-      .join(" / ");
+  // 시작일과 종료일을 하나의 날짜 문자열로 조합합니다.
+  let date = startDate;
+  if (startDate && endDate && startDate !== endDate) {
+    date = `${startDate} ~ ${endDate}`;
   }
 
-  return { title, date, venue, region, industry, month, baseText };
+  // 제목과 부제를 합칩니다.
+  const fullTitle = subtitle ? `${title} (${subtitle})` : title;
+
+  // 추출한 모든 정보를 조합하여 임베딩에 사용할 baseText를 만듭니다.
+  // 각 정보 앞에 태그를 붙여주면 의미를 더 명확하게 할 수 있습니다.
+  const baseText = [
+    fullTitle,
+    category && `분류/구분:${category}`,
+    industry && `행사분야:${industry}`,
+    date && `기간:${date}`,
+    venue && `장소:${venue}`,
+    price && `입장료:${price}`,
+    age && `추천연령:${age}`,
+    gender && `성별:${gender}`,
+    interest && `관심사:${interest}`,
+    job && `직업:${job}`,
+    host && `주최:${host}`,
+    manage && `주관:${manage}`,
+    inquiry && `문의:${inquiry}`,
+    site && `웹사이트:${site}`,
+    ticket && `티켓 예약:${ticket}`,
+  ]
+    .filter(Boolean) // 내용이 없는 항목은 제외합니다.
+    .join(" / ");
+
+  // 나중에 활용할 수 있도록 모든 필드를 객체로 반환합니다.
+  return {
+    category,
+    industry,
+    title,
+    subtitle,
+    date,
+    venue,
+    price,
+    host,
+    manage,
+    inquiry,
+    site,
+    ticket,
+    age,
+    gender,
+    interest,
+    job,
+    baseText,
+  };
+  // let baseText = [title, date, venue, region, industry, month && `월:${month}`]
+  //   .filter(Boolean)
+  //   .join(" / ");
+
+  // // ⚠️ 아무것도 못 찾았으면: 해당 로우의 모든 값을 합쳐서라도 임베딩
+  // if (!baseText || baseText.length < 2) {
+  //   baseText = Object.values(r)
+  //     .map((v) => String(v || "").trim())
+  //     .filter(Boolean)
+  //     .join(" / ");
+  // }
+
+  // return { title, date, venue, region, industry, month, baseText };
 }
 
 async function buildVectors() {
@@ -519,7 +593,7 @@ async function buildVectors() {
         out.push({ id: `${i}-${out.length}`, meta: m, text: seg, embedding });
       }
       // API 속도 제한을 피하기 위한 짧은 대기
-      await new Promise((r) => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 250));
     } catch (e) {
       console.error(`[row ${i}]`, e.message);
     }

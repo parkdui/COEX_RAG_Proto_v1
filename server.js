@@ -95,6 +95,10 @@ let CLOVA_BASE = getEnv(
   "https://clovastudio.apigw.ntruss.com"
 );
 
+// [추가] /testapp|/serviceapp 경로 없으면 붙이기 (CLOVA_BASE에도 동일하게 적용)
+if (!/\/(testapp|serviceapp)(\/|$)/.test(CLOVA_BASE)) {
+  CLOVA_BASE = CLOVA_BASE.replace(/\/$/, "") + "/" + APP_ID;
+}
 const CLOVA_KEY = getEnv("CLOVA_API_KEY");
 const CLOVA_MODEL = getEnv("CLOVA_MODEL", "HCX-005");
 

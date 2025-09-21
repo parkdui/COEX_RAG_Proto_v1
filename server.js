@@ -12,8 +12,9 @@ const fs = require("fs");
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
-const csv = require("csv-parser");
+// const csv = require("csv-parser");
 require("dotenv").config();
+const { google } = require("googleapis");
 
 const ALLOWED = [
   "http://localhost:3000",
@@ -53,6 +54,10 @@ const io = new Server(server, {
 const getEnv = (k, d = "") => {
   const v = process.env[k];
   if (!v) return d;
+  // [수정] private key의 \n을 실제 개행 문자로 변환
+  if (k === "GOOGLE_PRIVATE_KEY") {
+    return v.replace(/\\n/g, "\n");
+  }
   return String(v).split("#")[0].trim();
 };
 
@@ -93,8 +98,14 @@ let CLOVA_BASE = getEnv(
 const CLOVA_KEY = getEnv("CLOVA_API_KEY");
 const CLOVA_MODEL = getEnv("CLOVA_MODEL", "HCX-005");
 
+// [추가] Google Sheets ENV 로드
+const GOOGLE_SHEET_ID = getEnv("GOOGLE_SHEET_ID");
+const GOOGLE_SHEET_RANGE = getEnv("GOOGLE_SHEET_RANGE");
+const GOOGLE_SERVICE_ACCOUNT_EMAIL = getEnv("GOOGLE_SERVICE_ACCOUNT_EMAIL");
+const GOOGLE_PRIVATE_KEY = getEnv("GOOGLE_PRIVATE_KEY");
+
 // 파일 경로
-const DATA_CSV = path.join(__dirname, "data", "event_lists.csv");
+// const DATA_CSV = path.join(__dirname, "data", "event_lists.csv");
 const VECTORS_JSON = path.join(__dirname, "data", "vectors.json");
 const systemPrompt = fs.readFileSync(
   path.join(__dirname, "LLM", "system_prompt.txt"),
@@ -107,7 +118,6 @@ let defaultSystemPrompt = systemPrompt;
 // ---- Conversation Memory ----
 const chatHistories = new Map();
 const MAX_HISTORY = parseInt(getEnv("MAX_HISTORY", "20"), 10);
-
 function getCid(req) {
   // 우선순위: body.conversationId > 헤더 > (fallback) ip+UA
   return (
@@ -200,7 +210,7 @@ async function embedText(text) {
   }
 
   // ----- add: embedding token usage logging -----
-  const embUsage = json?.result?.usage ?? json?.usage ?? {}; // 안전하게
+  const embUsage = json?.result?.usage ?? json?.usage ?? {};
 
   const embInput =
     Number(
@@ -226,7 +236,6 @@ async function embedText(text) {
   return emb;
 }
 
-// 아래 함수 추가
 function extractEmbedding(json) {
   const cands = [
     json?.result?.embedding, // ← 문서 예시
@@ -349,39 +358,85 @@ async function callClovaChat(messages, opts = {}) {
   };
 }
 
-const { once } = require("events");
+// const { once } = require("events");
 // 구분자 자동 감지 로더
-async function loadCsvRows(filePath) {
-  for (const sep of [",", ";", "\t"]) {
-    const rows = [];
-    const rs = fs.createReadStream(filePath).pipe(
-      csv({
-        separator: sep,
-        mapHeaders: ({ header }) => normalizeHeader(header),
-      })
-    );
-    rs.on("data", (r) => rows.push(r));
-    rs.on("error", (e) => console.error("[csv] stream error:", e));
-    await once(rs, "end");
-    // 키가 2개 이상 나오면 정상 파싱으로 판단
-    if (rows.length && Object.keys(rows[0]).length > 1) {
-      console.log(`[csv] parsed with separator "${sep}"`);
-      return rows;
-    }
-  }
-  // 마지막 시도라도 반환
-  const fallback = [];
-  const rs = fs.createReadStream(filePath).pipe(csv());
-  rs.on("data", (r) => fallback.push(r));
-  await once(rs, "end");
-  console.warn("[csv] fallback parser used");
-  return fallback;
-}
+// async function loadCsvRows(filePath) {
+//   for (const sep of [",", ";", "\t"]) {
+//     const rows = [];
+//     const rs = fs.createReadStream(filePath).pipe(
+//       csv({
+//         separator: sep,
+//         mapHeaders: ({ header }) => normalizeHeader(header),
+//       })
+//     );
+//     rs.on("data", (r) => rows.push(r));
+//     rs.on("error", (e) => console.error("[csv] stream error:", e));
+//     await once(rs, "end");
+//     // 키가 2개 이상 나오면 정상 파싱으로 판단
+//     if (rows.length && Object.keys(rows[0]).length > 1) {
+//       console.log(`[csv] parsed with separator "${sep}"`);
+//       return rows;
+//     }
+//   }
+//   // 마지막 시도라도 반환
+//   const fallback = [];
+//   const rs = fs.createReadStream(filePath).pipe(csv());
+//   rs.on("data", (r) => fallback.push(r));
+//   await once(rs, "end");
+//   console.warn("[csv] fallback parser used");
+//   return fallback;
+// }
 
-function normalizeHeader(h) {
-  return String(h || "")
-    .replace(/^\uFEFF/, "")
-    .trim(); // BOM 제거
+// function normalizeHeader(h) {
+//   return String(h || "")
+//     .replace(/^\uFEFF/, "")
+//     .trim(); // BOM 제거
+// }
+
+// [추가] Google Sheets 데이터 로더 함수
+async function loadDataFromGoogleSheet() {
+  if (
+    !GOOGLE_SHEET_ID ||
+    !GOOGLE_SHEET_RANGE ||
+    !GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+    !GOOGLE_PRIVATE_KEY
+  ) {
+    throw new Error("Google Sheets API credentials are not set in .env file.");
+  }
+
+  const auth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      private_key: GOOGLE_PRIVATE_KEY,
+    },
+    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+  });
+
+  const sheets = google.sheets({ version: "v4", auth });
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: GOOGLE_SHEET_ID,
+    range: GOOGLE_SHEET_RANGE,
+  });
+
+  const rows = response.data.values;
+  if (!rows || rows.length === 0) {
+    console.log("No data found in Google Sheet.");
+    return [];
+  }
+
+  // 첫 번째 행을 헤더(key)로 사용
+  const headers = rows[0].map((h) => String(h || "").trim());
+  // 나머지 행들을 { header: value } 형태의 객체 배열로 변환
+  const data = rows.slice(1).map((row) => {
+    const rowData = {};
+    headers.forEach((header, index) => {
+      rowData[header] = row[index];
+    });
+    return rowData;
+  });
+
+  console.log(`[Google Sheets] Loaded ${data.length} rows.`);
+  return data;
 }
 
 // 컬럼 별칭
@@ -444,9 +499,14 @@ function mapRow(r) {
   return { title, date, venue, region, industry, month, baseText };
 }
 
-async function buildVectorsFromCsv() {
-  const rows = await loadCsvRows(DATA_CSV);
+async function buildVectors() {
+  console.log("Fetching data from Google Sheets...");
+  const rows = await loadDataFromGoogleSheet(); // Google Sheets에서 데이터 가져오기
   const out = [];
+  // const rows = await loadCsvRows(DATA_CSV);
+  // const out = [];
+  console.log(`Starting to build vectors for ${rows.length} rows...`);
+
   for (let i = 0; i < rows.length; i++) {
     try {
       const m = mapRow(rows[i]);
@@ -458,31 +518,36 @@ async function buildVectorsFromCsv() {
         const embedding = await embedText(seg);
         out.push({ id: `${i}-${out.length}`, meta: m, text: seg, embedding });
       }
+      // API 속도 제한을 피하기 위한 짧은 대기
       await new Promise((r) => setTimeout(r, 50));
     } catch (e) {
       console.error(`[row ${i}]`, e.message);
     }
   }
 
-  if (!out.length) throw new Error("No embeddings produced");
+  if (!out.length)
+    throw new Error("No embeddings produced from Google Sheet data.");
   const tmp = VECTORS_JSON + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(out, null, 2), "utf8");
   fs.renameSync(tmp, VECTORS_JSON);
+
+  console.log(`Successfully built ${out.length} vectors.`);
   return out.length;
 }
 
 // ========== (1) 전처리/임베딩 (보강판) ==========
 app.post("/pre_processing_for_embedding", async (_req, res) => {
   try {
-    if (!fs.existsSync(DATA_CSV)) {
-      return res
-        .status(400)
-        .json({ ok: false, error: `CSV not found at ${DATA_CSV}` });
-    }
-    const count = await buildVectorsFromCsv();
+    // if (!fs.existsSync(DATA_CSV)) {
+    //   return res
+    //     .status(400)
+    //     .json({ ok: false, error: `CSV not found at ${DATA_CSV}` });
+    // }
+    const count = await buildVectors();
     res.json({ ok: true, count, file: "data/vectors.json" });
     logTokenSummary("after build");
   } catch (e) {
+    console.error(e); // [추가] 에러 로그
     res.status(500).json({ ok: false, error: String(e) });
   }
 });
@@ -712,38 +777,68 @@ io.on("connection", (socket) => {
   });
 });
 
-async function ensureVectorsUpToDate() {
-  if (!fs.existsSync(DATA_CSV)) {
-    console.warn("[warmup] CSV not found, skip warmup");
-    return;
-  }
-  const vecExists = fs.existsSync(VECTORS_JSON);
-  let need = !vecExists;
+// async function ensureVectorsUpToDate() {
+//   if (!fs.existsSync(DATA_CSV)) {
+//     console.warn("[warmup] CSV not found, skip warmup");
+//     return;
+//   }
+//   const vecExists = fs.existsSync(VECTORS_JSON);
+//   let need = !vecExists;
 
-  if (!need) {
+//   if (!need) {
+//     try {
+//       const csvM = fs.statSync(DATA_CSV).mtimeMs;
+//       const vecM = fs.statSync(VECTORS_JSON).mtimeMs;
+//       if (vecM < csvM) need = true;
+//       const arr = JSON.parse(fs.readFileSync(VECTORS_JSON, "utf8"));
+//       if (!Array.isArray(arr) || arr.length === 0) need = true;
+//     } catch {
+//       need = true;
+//     }
+//   }
+
+//   if (need) {
+//     console.log("🔧 vectors.json missing/stale → building...");
+//     const count = await buildVectorsFromCsv();
+//     console.log(`✅ vectors.json ready: ${count} items`);
+//   } else {
+//     console.log("✅ vectors.json up-to-date");
+//   }
+// }
+
+// [수정] 서버 시작 시 `vectors.json` 파일이 없으면 Google Sheets 기반으로 생성
+async function buildVectorsIfMissing() {
+  const vectorsExist = fs.existsSync(VECTORS_JSON);
+  let needBuild = !vectorsExist;
+
+  if (vectorsExist) {
     try {
-      const csvM = fs.statSync(DATA_CSV).mtimeMs;
-      const vecM = fs.statSync(VECTORS_JSON).mtimeMs;
-      if (vecM < csvM) need = true;
       const arr = JSON.parse(fs.readFileSync(VECTORS_JSON, "utf8"));
-      if (!Array.isArray(arr) || arr.length === 0) need = true;
+      if (!Array.isArray(arr) || arr.length === 0) {
+        needBuild = true; // 파일은 있지만 내용이 비어있으면 재생성
+      }
     } catch {
-      need = true;
+      needBuild = true; // 파일이 깨져있으면 재생성
     }
   }
 
-  if (need) {
-    console.log("🔧 vectors.json missing/stale → building...");
-    const count = await buildVectorsFromCsv();
+  if (needBuild) {
+    console.log(
+      "🔧 vectors.json missing or empty → building from Google Sheets..."
+    );
+    const count = await buildVectors();
     console.log(`✅ vectors.json ready: ${count} items`);
   } else {
-    console.log("✅ vectors.json up-to-date");
+    console.log(
+      "✅ vectors.json already exists. Use the API to rebuild if needed."
+    );
   }
 }
 
 // 서버 시작부
 const PORT = process.env.PORT || 3000;
-ensureVectorsUpToDate()
+buildVectorsIfMissing() // [수정] 함수 이름 변경
+  // ensureVectorsUpToDate()
   .catch((err) => console.error("[warmup error]", err))
   .finally(() => {
     server.listen(PORT, () => console.log(`http://localhost:${PORT}`));

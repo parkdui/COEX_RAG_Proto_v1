@@ -1,3 +1,6 @@
+# Google Cloud credentials
+*.json
+
 # 환경/비밀키
 .env
 .env.*

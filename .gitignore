@@ -1,5 +1,6 @@
 # Google Cloud credentials
-*.json
+# *.json
+coex-spreadsheet-94b23c76d023.json
 
 # 환경/비밀키
 .env

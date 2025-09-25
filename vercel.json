@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "functions": {
+    "server.js": {
+      "includeFiles": "LLM/**"
+    }
+  },
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "server.js"
+    }
+  ]
+}

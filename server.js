@@ -40,6 +40,7 @@ app.use(
 );
 app.use(express.json());
 app.use(express.static("public"));
+app.use("/LLM", express.static("LLM")); // ◀ 이 줄을 추가
 
 const server = http.createServer(app);
 const io = new Server(server, {

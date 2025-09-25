@@ -166,11 +166,9 @@
           return response.text();
         })
         .then((text) => {
-          // 성공적으로 불러온 텍스트를 textarea의 값으로 설정
           promptBox.value = text;
         })
         .catch((error) => {
-          // 오류 발생 시 콘솔에 로그를 남기고, 사용자에게 placeholder로 상태를 알림
           console.error(
             "system_prompt.txt 파일을 불러오는 데 실패했습니다:",
             error

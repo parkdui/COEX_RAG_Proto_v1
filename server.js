@@ -595,7 +595,7 @@ async function buildVectors() {
         out.push({ id: `${i}-${out.length}`, meta: m, text: seg, embedding });
       }
       // API 속도 제한을 피하기 위한 짧은 대기
-      await new Promise((r) => setTimeout(r, 250));
+      await new Promise((r) => setTimeout(r, 1000));
     } catch (e) {
       console.error(`[row ${i}]`, e.message);
     }

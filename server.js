@@ -40,7 +40,7 @@ app.use(
 );
 app.use(express.json());
 app.use(express.static("public"));
-app.use("/LLM", express.static("LLM"));
+// app.use("/LLM", express.static("LLM"));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -117,7 +117,7 @@ const LOG_GOOGLE_SHEET_NAME = getEnv("LOG_GOOGLE_SHEET_NAME"); // "Sheet1"
 // const DATA_CSV = path.join(__dirname, "data", "event_lists.csv");
 const VECTORS_JSON = path.join(__dirname, "data", "vectors.json");
 const systemPrompt = fs.readFileSync(
-  path.join(__dirname, "LLM", "system_prompt.txt"),
+  path.join(__dirname, "public", "LLM", "system_prompt.txt"),
   "utf8"
 );
 

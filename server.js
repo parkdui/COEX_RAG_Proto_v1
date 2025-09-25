@@ -40,7 +40,7 @@ app.use(
 );
 app.use(express.json());
 app.use(express.static("public"));
-app.use("/LLM", express.static("LLM")); // ◀ 이 줄을 추가
+app.use("/LLM", express.static("LLM"));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -103,11 +103,15 @@ if (!/\/(testapp|serviceapp)(\/|$)/.test(CLOVA_BASE)) {
 const CLOVA_KEY = getEnv("CLOVA_API_KEY");
 const CLOVA_MODEL = getEnv("CLOVA_MODEL", "HCX-005");
 
-// [추가] Google Sheets ENV 로드
+// Google Sheets ENV 로드
 const GOOGLE_SHEET_ID = getEnv("GOOGLE_SHEET_ID");
 const GOOGLE_SHEET_RANGE = getEnv("GOOGLE_SHEET_RANGE");
 const GOOGLE_SERVICE_ACCOUNT_EMAIL = getEnv("GOOGLE_SERVICE_ACCOUNT_EMAIL");
 const GOOGLE_PRIVATE_KEY = getEnv("GOOGLE_PRIVATE_KEY");
+
+// Google Sheets 로깅용 ENV
+const LOG_GOOGLE_SHEET_ID = getEnv("LOG_GOOGLE_SHEET_ID");
+const LOG_GOOGLE_SHEET_NAME = getEnv("LOG_GOOGLE_SHEET_NAME"); // "Sheet1"
 
 // 파일 경로
 // const DATA_CSV = path.join(__dirname, "data", "event_lists.csv");
@@ -363,40 +367,46 @@ async function callClovaChat(messages, opts = {}) {
   };
 }
 
-// const { once } = require("events");
-// 구분자 자동 감지 로더
-// async function loadCsvRows(filePath) {
-//   for (const sep of [",", ";", "\t"]) {
-//     const rows = [];
-//     const rs = fs.createReadStream(filePath).pipe(
-//       csv({
-//         separator: sep,
-//         mapHeaders: ({ header }) => normalizeHeader(header),
-//       })
-//     );
-//     rs.on("data", (r) => rows.push(r));
-//     rs.on("error", (e) => console.error("[csv] stream error:", e));
-//     await once(rs, "end");
-//     // 키가 2개 이상 나오면 정상 파싱으로 판단
-//     if (rows.length && Object.keys(rows[0]).length > 1) {
-//       console.log(`[csv] parsed with separator "${sep}"`);
-//       return rows;
-//     }
-//   }
-//   // 마지막 시도라도 반환
-//   const fallback = [];
-//   const rs = fs.createReadStream(filePath).pipe(csv());
-//   rs.on("data", (r) => fallback.push(r));
-//   await once(rs, "end");
-//   console.warn("[csv] fallback parser used");
-//   return fallback;
-// }
+// [추가] 채팅 로그를 Google Sheet에 추가하는 함수
+async function appendToLogSheet(rowData) {
+  // 로그 시트 정보가 .env에 없으면 함수를 조용히 종료
+  if (
+    !LOG_GOOGLE_SHEET_ID ||
+    !LOG_GOOGLE_SHEET_NAME ||
+    !GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+    !GOOGLE_PRIVATE_KEY
+  ) {
+    console.warn(
+      "[Google Sheets Log] Logging credentials not set in .env. Skipping log append."
+    );
+    return;
+  }
 
-// function normalizeHeader(h) {
-//   return String(h || "")
-//     .replace(/^\uFEFF/, "")
-//     .trim(); // BOM 제거
-// }
+  try {
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        private_key: GOOGLE_PRIVATE_KEY,
+      },
+      // 읽기/쓰기 권한이 필요
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
+
+    const sheets = google.sheets({ version: "v4", auth });
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: LOG_GOOGLE_SHEET_ID,
+      range: LOG_GOOGLE_SHEET_NAME, // 시트 이름! A1 표기법이 아님
+      valueInputOption: "USER_ENTERED",
+      resource: {
+        values: [rowData], // rowData는 배열이어야 함. 예: ['val1', 'val2']
+      },
+    });
+    console.log(`[Google Sheets Log] Successfully appended a row.`);
+  } catch (error) {
+    // 에러가 발생해도 채팅 흐름은 중단되지 않도록 콘솔에만 출력
+    console.error("Error appending to Google Sheet:", error.message);
+  }
+}
 
 // [추가] Google Sheets 데이터 로더 함수
 async function loadDataFromGoogleSheet() {
@@ -563,19 +573,6 @@ function mapRow(r) {
     job,
     baseText,
   };
-  // let baseText = [title, date, venue, region, industry, month && `월:${month}`]
-  //   .filter(Boolean)
-  //   .join(" / ");
-
-  // // ⚠️ 아무것도 못 찾았으면: 해당 로우의 모든 값을 합쳐서라도 임베딩
-  // if (!baseText || baseText.length < 2) {
-  //   baseText = Object.values(r)
-  //     .map((v) => String(v || "").trim())
-  //     .filter(Boolean)
-  //     .join(" / ");
-  // }
-
-  // return { title, date, venue, region, industry, month, baseText };
 }
 
 async function buildVectors() {
@@ -695,22 +692,6 @@ app.post("/query_with_embedding", async (req, res) => {
       },
     ];
 
-    // function wrapMessages(messages) {
-    //   return messages.map((m) => ({
-    //     role: m.role,
-    //     content: [{ type: "text", text: m.content }],
-    //   }));
-    // }
-
-    // const body = {
-    //   messages: wrapMessages(messages),
-    //   temperature: opts.temperature ?? 0.3,
-    //   topP: opts.topP ?? 0.8,
-    //   maxTokens: opts.maxTokens ?? 700,
-    //   repetitionPenalty: 1.1, // 문서 기준 repeatPenalty → repetitionPenalty 이름도 확인
-    //   stop: [],
-    // };
-
     const result = await callClovaChat(messages, {
       temperature: 0.3,
       maxTokens: 700,
@@ -827,11 +808,29 @@ io.on("connection", (socket) => {
         maxTokens: 700,
       });
 
-      // 6) 히스토리 업데이트
+      // 6) 구글 시트 로깅
+      const isFirstMessage = prev.length === 0;
+      if (isFirstMessage) {
+        // "YYYY.MM.DD." 형식으로 날짜 생성
+        const timestamp = new Date()
+          .toLocaleDateString("ko-KR", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+          .replace(/ /g, "");
+        appendToLogSheet([timestamp, activeSystemPrompt, q, result.content]);
+      } else {
+        appendToLogSheet(["", "", q, result.content]);
+      }
+
+      // 7) 히스토리 업데이트
       pushHistory(socket.id, "user", q);
       pushHistory(socket.id, "assistant", result.content);
 
-      // 7) 응답 전송
+      // 8) 응답 전송
       socket.emit("reply", {
         answer: result.content,
         hits: slimHits,
@@ -856,36 +855,7 @@ io.on("connection", (socket) => {
   });
 });
 
-// async function ensureVectorsUpToDate() {
-//   if (!fs.existsSync(DATA_CSV)) {
-//     console.warn("[warmup] CSV not found, skip warmup");
-//     return;
-//   }
-//   const vecExists = fs.existsSync(VECTORS_JSON);
-//   let need = !vecExists;
-
-//   if (!need) {
-//     try {
-//       const csvM = fs.statSync(DATA_CSV).mtimeMs;
-//       const vecM = fs.statSync(VECTORS_JSON).mtimeMs;
-//       if (vecM < csvM) need = true;
-//       const arr = JSON.parse(fs.readFileSync(VECTORS_JSON, "utf8"));
-//       if (!Array.isArray(arr) || arr.length === 0) need = true;
-//     } catch {
-//       need = true;
-//     }
-//   }
-
-//   if (need) {
-//     console.log("🔧 vectors.json missing/stale → building...");
-//     const count = await buildVectorsFromCsv();
-//     console.log(`✅ vectors.json ready: ${count} items`);
-//   } else {
-//     console.log("✅ vectors.json up-to-date");
-//   }
-// }
-
-// [수정] 서버 시작 시 `vectors.json` 파일이 없으면 Google Sheets 기반으로 생성
+// 서버 시작 시 `vectors.json` 파일이 없으면 Google Sheets 기반으로 생성
 async function buildVectorsIfMissing() {
   const vectorsExist = fs.existsSync(VECTORS_JSON);
   let needBuild = !vectorsExist;
@@ -916,7 +886,7 @@ async function buildVectorsIfMissing() {
 
 // 서버 시작부
 const PORT = process.env.PORT || 3000;
-buildVectorsIfMissing() // [수정] 함수 이름 변경
+buildVectorsIfMissing()
   // ensureVectorsUpToDate()
   .catch((err) => console.error("[warmup error]", err))
   .finally(() => {

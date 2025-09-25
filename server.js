@@ -39,7 +39,8 @@ app.use(
   })
 );
 app.use(express.json());
-app.use(express.static("public"));
+app.use(express.static(path.join(__dirname, "public")));
+// app.use(express.static("public"));
 // app.use("/LLM", express.static("LLM"));
 
 const server = http.createServer(app);

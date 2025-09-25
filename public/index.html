@@ -33,13 +33,7 @@
       <main class="chat-area">
         <div id="chat" class="chat"></div>
         <form id="composer" class="composer" autocomplete="off">
-          <input
-            id="q"
-            class="input"
-            type="text"
-            inputmode="search"
-            placeholder="예) 이번 주말 가족 체험 프로그램 추천해줘"
-          />
+          <input id="q" class="input" type="text" inputmode="search" />
           <button class="send" aria-label="보내기">보내기</button>
         </form>
       </main>
@@ -55,7 +49,7 @@
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
       // 기본 백엔드 URL (Render/Railway 같은 고정 주소가 있으면 여기 넣기)
-      const DEFAULT_API = "https://10bbb4da001e.ngrok-free.app"; // 임시: ngrok 주소 or 고정 백엔드 주소
+      const DEFAULT_API = "https://250663a05342.ngrok-free.app"; // 임시: ngrok 주소 or 고정 백엔드 주소
 
       // 편의기능: ?api= 로 오버라이드 가능 + localStorage 저장
       const urlApi = new URLSearchParams(location.search).get("api");
@@ -163,6 +157,26 @@
       const statusEl = document.getElementById("status");
       const bubbleTpl = document.getElementById("bubble");
 
+      fetch("system_prompt.txt")
+        .then((response) => {
+          if (!response.ok) {
+            // 파일이 없거나 읽을 수 없을 때의 예외 처리
+            throw new Error("Network response was not ok");
+          }
+          return response.text();
+        })
+        .then((text) => {
+          // 성공적으로 불러온 텍스트를 textarea의 값으로 설정
+          promptBox.value = text;
+        })
+        .catch((error) => {
+          // 오류 발생 시 콘솔에 로그를 남기고, 사용자에게 placeholder로 상태를 알림
+          console.error(
+            "system_prompt.txt 파일을 불러오는 데 실패했습니다:",
+            error
+          );
+          promptBox.placeholder = "system_prompt.txt 파일을 찾을 수 없습니다.";
+        });
       // ---- socket.io ----
       //   const socket = io();
 

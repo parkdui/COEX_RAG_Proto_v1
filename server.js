@@ -646,8 +646,8 @@ app.post("/query_with_embedding", async (req, res) => {
       (req.body?.systemPrompt && req.body.systemPrompt.trim()) ||
       defaultSystemPrompt;
 
-    const cid = getCid(req); // ← 추가
-    const prev = chatHistories.get(cid) || []; // ← 추가
+    const cid = getCid(req);
+    const prev = chatHistories.get(cid) || [];
 
     const vectors = JSON.parse(fs.readFileSync(VECTORS_JSON, "utf8"));
     if (!Array.isArray(vectors) || vectors.length === 0) {
@@ -665,8 +665,8 @@ app.post("/query_with_embedding", async (req, res) => {
     const ranked = scored.slice(0, TOP_K);
     const slimHits = ranked.map(({ v, score }) => ({
       id: v.id,
-      meta: v.meta, // {title, date, venue, region, industry, month}
-      text: v.text, // 검색에 사용된 원문
+      meta: v.meta,
+      text: v.text,
       score: Number(score.toFixed(4)),
     }));
 

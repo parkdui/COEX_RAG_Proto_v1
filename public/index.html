@@ -157,7 +157,7 @@
       const statusEl = document.getElementById("status");
       const bubbleTpl = document.getElementById("bubble");
 
-      fetch("LLM/system_prompt.txt")
+      fetch("./LLM/system_prompt.txt")
         .then((response) => {
           if (!response.ok) {
             // 파일이 없거나 읽을 수 없을 때의 예외 처리

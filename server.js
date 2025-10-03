@@ -736,6 +736,66 @@ io.on("connection", (socket) => {
   console.log(`✅ [socket] connected: ${socket.id}`);
   chatHistories.set(socket.id, []);
 
+  // 'go' 버튼 클릭 시 대화 시작 (인사말 생성)
+  socket.on("start-conversation", async (payload) => {
+    try {
+      const activeSystemPrompt =
+        (payload.systemPrompt && payload.systemPrompt.trim()) ||
+        defaultSystemPrompt;
+
+      // 시스템 프롬프트에 정의된 인사말을 생성하기 위해 초기 메시지 구성
+      const messages = [
+        { role: "system", content: activeSystemPrompt },
+        // 모델이 첫 응답(인사말)을 생성하도록 유도하는 메시지
+        { role: "user", content: "안녕하세요." },
+      ];
+
+      // LLM 호출하여 인사말 생성
+      const result = await callClovaChat(messages, {
+        temperature: 0.5, // 인사말이므로 약간의 창의성을 허용
+        maxTokens: 300,
+      });
+
+      // ==================== [수정된 부분 시작] ====================
+      // 구글 시트 로깅 추가
+      const timestamp = new Date()
+        .toLocaleDateString("ko-KR", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+        .replace(/ /g, "");
+
+      // 첫 로그에는 시스템 프롬프트와 생성된 인사말을 기록합니다.
+      // 사용자 질문은 "안녕하세요."로 고정됩니다.
+      appendToLogSheet([
+        timestamp,
+        activeSystemPrompt,
+        "안녕하세요.",
+        result.content,
+      ]);
+      // ==================== [수정된 부분 끝] ======================
+
+      // 생성된 인사말을 대화 기록에 추가
+      // (사용자가 입력한 "안녕하세요."는 실제 입력이 아니므로 기록하지 않음)
+      pushHistory(socket.id, "assistant", result.content);
+
+      // 클라이언트로 인사말 응답 전송
+      socket.emit("reply", {
+        answer: result.content,
+        hits: [], // 첫 인사에는 참조 정보가 없음
+        tokens: result.tokens,
+      });
+
+      logTokenSummary("after start-conversation");
+    } catch (e) {
+      console.error("[socket start-conversation error]", e);
+      socket.emit("reply", { error: String(e) });
+    }
+  });
+
   socket.on("message", async (payload) => {
     try {
       // const q = String(question || "").trim();

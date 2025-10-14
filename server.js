@@ -404,7 +404,6 @@ async function appendToLogSheet(rowData) {
     });
     console.log(`[Google Sheets Log] Successfully appended a row.`);
   } catch (error) {
-    // 에러가 발생해도 채팅 흐름은 중단되지 않도록 콘솔에만 출력
     console.error("Error appending to Google Sheet:", error.message);
   }
 }
@@ -612,6 +611,20 @@ async function buildVectors() {
   return out.length;
 }
 
+function removeEmojiLikeExpressions(text) {
+  if (typeof text !== "string") return ""; // 입력값이 문자열이 아닌 경우 빈 문자열 반환
+  return (
+    text
+      // 이모지 제거 (유니코드 속성 사용)
+      .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "")
+      // ㅎㅎ, ㅋㅋ, ㅠㅠ, ^^, ^^;;, ;; 등 반복 감정 표현 제거
+      .replace(/([ㅎㅋㅠ]+|[\^]+|;{2,})/g, "")
+      // 여러 번 반복된 공백을 하나로 정리
+      .replace(/\s{2,}/g, " ")
+      .trim()
+  );
+}
+
 // ========== (1) 전처리/임베딩 (보강판) ==========
 app.post("/pre_processing_for_embedding", async (_req, res) => {
   try {
@@ -756,7 +769,8 @@ io.on("connection", (socket) => {
         maxTokens: 300,
       });
 
-      // ==================== [수정된 부분 시작] ====================
+      const cleanedAnswer = removeEmojiLikeExpressions(result.content);
+
       // 구글 시트 로깅 추가
       const timestamp = new Date()
         .toLocaleDateString("ko-KR", {
@@ -774,17 +788,17 @@ io.on("connection", (socket) => {
         timestamp,
         activeSystemPrompt,
         "안녕하세요.",
-        result.content,
+        // result.content,
+        cleanedAnswer,
       ]);
-      // ==================== [수정된 부분 끝] ======================
 
       // 생성된 인사말을 대화 기록에 추가
       // (사용자가 입력한 "안녕하세요."는 실제 입력이 아니므로 기록하지 않음)
-      pushHistory(socket.id, "assistant", result.content);
+      pushHistory(socket.id, "assistant", cleanedAnswer);
 
       // 클라이언트로 인사말 응답 전송
       socket.emit("reply", {
-        answer: result.content,
+        answer: cleanedAnswer,
         hits: [], // 첫 인사에는 참조 정보가 없음
         tokens: result.tokens,
       });
@@ -869,6 +883,8 @@ io.on("connection", (socket) => {
         maxTokens: 700,
       });
 
+      const cleanedAnswer = removeEmojiLikeExpressions(result.content);
+
       // 6) 구글 시트 로깅
       const isFirstMessage = prev.length === 0;
       if (isFirstMessage) {
@@ -882,18 +898,18 @@ io.on("connection", (socket) => {
             minute: "2-digit",
           })
           .replace(/ /g, "");
-        appendToLogSheet([timestamp, activeSystemPrompt, q, result.content]);
+        appendToLogSheet([timestamp, activeSystemPrompt, q, cleanedAnswer]);
       } else {
-        appendToLogSheet(["", "", q, result.content]);
+        appendToLogSheet(["", "", q, cleanedAnswer]);
       }
 
       // 7) 히스토리 업데이트
       pushHistory(socket.id, "user", q);
-      pushHistory(socket.id, "assistant", result.content);
+      pushHistory(socket.id, "assistant", cleanedAnswer);
 
       // 8) 응답 전송
       socket.emit("reply", {
-        answer: result.content,
+        answer: cleanedAnswer,
         hits: slimHits,
         tokens: result.tokens,
       });

@@ -127,6 +127,7 @@ let defaultSystemPrompt = systemPrompt;
 
 // ---- Conversation Memory ----
 const chatHistories = new Map();
+const chatLogs = new Map();
 const MAX_HISTORY = parseInt(getEnv("MAX_HISTORY", "20"), 10);
 function getCid(req) {
   // 우선순위: body.conversationId > 헤더 > (fallback) ip+UA
@@ -368,45 +369,118 @@ async function callClovaChat(messages, opts = {}) {
   };
 }
 
-// [추가] 채팅 로그를 Google Sheet에 추가하는 함수
-async function appendToLogSheet(rowData) {
-  // 로그 시트 정보가 .env에 없으면 함수를 조용히 종료
-  if (
-    !LOG_GOOGLE_SHEET_ID ||
-    !LOG_GOOGLE_SHEET_NAME ||
-    !GOOGLE_SERVICE_ACCOUNT_EMAIL ||
-    !GOOGLE_PRIVATE_KEY
-  ) {
-    console.warn(
-      "[Google Sheets Log] Logging credentials not set in .env. Skipping log append."
-    );
+// [수정] 기존 appendToLogSheet 함수를 아래 코드로 전체 교체합니다.
+async function appendToLogSheet(socketId, messagesToLog) {
+  const credentials = {
+    LOG_GOOGLE_SHEET_ID,
+    LOG_GOOGLE_SHEET_NAME,
+    GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    GOOGLE_PRIVATE_KEY,
+  };
+  if (Object.values(credentials).some((v) => !v)) {
+    console.warn("[Google Sheets Log] Credentials not set. Skipping log.");
     return;
   }
 
   try {
     const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        private_key: GOOGLE_PRIVATE_KEY,
-      },
-      // 읽기/쓰기 권한이 필요
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+      /* ... */
     });
-
     const sheets = google.sheets({ version: "v4", auth });
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: LOG_GOOGLE_SHEET_ID,
-      range: LOG_GOOGLE_SHEET_NAME, // 시트 이름! A1 표기법이 아님
-      valueInputOption: "USER_ENTERED",
-      resource: {
-        values: [rowData], // rowData는 배열이어야 함. 예: ['val1', 'val2']
-      },
-    });
-    console.log(`[Google Sheets Log] Successfully appended a row.`);
+
+    const logData = chatLogs.get(socketId);
+    const history = chatHistories.get(socketId) || [];
+
+    // 이전에 기록한 row가 있는지 확인
+    if (logData && logData.rowNumber) {
+      // --- 업데이트 로직 ---
+      // 이전에 기록된 메시지 수를 기반으로 시작 열을 계산 (C열이 2)
+      // history.length는 현재 메시지까지 포함하므로 2를 빼서 이전 길이를 구함
+      const startColumnIndex = 2 + (history.length - messagesToLog.length);
+      const endColumnIndex = startColumnIndex + messagesToLog.length - 1;
+
+      const startColumn = columnIndexToLetter(startColumnIndex);
+      const endColumn = columnIndexToLetter(endColumnIndex);
+
+      const range = `${LOG_GOOGLE_SHEET_NAME}!${startColumn}${logData.rowNumber}:${endColumn}${logData.rowNumber}`;
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: LOG_GOOGLE_SHEET_ID,
+        range: range,
+        valueInputOption: "USER_ENTERED",
+        resource: { values: [messagesToLog] },
+      });
+      console.log(`[Google Sheets Log] Updated row ${logData.rowNumber}`);
+    } else {
+      // --- 첫 기록 (Append) 로직 ---
+      const timestamp = new Date()
+        .toLocaleDateString("ko-KR", {
+          /* ... */
+        })
+        .replace(/ /g, "");
+      const systemPrompt = logData ? logData.systemPrompt : defaultSystemPrompt;
+      const rowData = [timestamp, systemPrompt, ...messagesToLog];
+
+      const response = await sheets.spreadsheets.values.append({
+        spreadsheetId: LOG_GOOGLE_SHEET_ID,
+        range: LOG_GOOGLE_SHEET_NAME,
+        valueInputOption: "USER_ENTERED",
+        resource: { values: [rowData] },
+      });
+
+      // 응답에서 새로 추가된 row의 번호를 추출
+      const updatedRange = response.data.updates.updatedRange;
+      const match = updatedRange.match(/!A(\d+):/);
+      if (match && match[1] && logData) {
+        logData.rowNumber = parseInt(match[1], 10);
+        console.log(
+          `[Google Sheets Log] Appended new row ${logData.rowNumber}`
+        );
+      }
+    }
   } catch (error) {
-    console.error("Error appending to Google Sheet:", error.message);
+    console.error("Error logging to Google Sheet:", error.message);
   }
 }
+// // [추가] 채팅 로그를 Google Sheet에 추가하는 함수
+// async function appendToLogSheet(rowData) {
+//   // 로그 시트 정보가 .env에 없으면 함수를 조용히 종료
+//   if (
+//     !LOG_GOOGLE_SHEET_ID ||
+//     !LOG_GOOGLE_SHEET_NAME ||
+//     !GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+//     !GOOGLE_PRIVATE_KEY
+//   ) {
+//     console.warn(
+//       "[Google Sheets Log] Logging credentials not set in .env. Skipping log append."
+//     );
+//     return;
+//   }
+
+//   try {
+//     const auth = new google.auth.GoogleAuth({
+//       credentials: {
+//         client_email: GOOGLE_SERVICE_ACCOUNT_EMAIL,
+//         private_key: GOOGLE_PRIVATE_KEY,
+//       },
+//       // 읽기/쓰기 권한이 필요
+//       scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+//     });
+
+//     const sheets = google.sheets({ version: "v4", auth });
+//     await sheets.spreadsheets.values.append({
+//       spreadsheetId: LOG_GOOGLE_SHEET_ID,
+//       range: LOG_GOOGLE_SHEET_NAME, // 시트 이름! A1 표기법이 아님
+//       valueInputOption: "USER_ENTERED",
+//       resource: {
+//         values: [rowData], // rowData는 배열이어야 함. 예: ['val1', 'val2']
+//       },
+//     });
+//     console.log(`[Google Sheets Log] Successfully appended a row.`);
+//   } catch (error) {
+//     console.error("Error appending to Google Sheet:", error.message);
+//   }
+// }
 
 // [추가] Google Sheets 데이터 로더 함수
 async function loadDataFromGoogleSheet() {
@@ -745,9 +819,29 @@ app.get("/health", (_req, res) => {
   });
 });
 
+// ==================== [수정 코드 시작] ====================
+// 숫자를 Excel 열 문자로 변환하는 헬퍼 함수 (예: 0 -> A, 1 -> B, 26 -> AA)
+function columnIndexToLetter(index) {
+  let temp,
+    letter = "";
+  while (index >= 0) {
+    temp = index % 26;
+    letter = String.fromCharCode(temp + 65) + letter;
+    index = Math.floor(index / 26) - 1;
+  }
+  return letter;
+}
+// ==================== [수정 코드 종료] ====================
+
 io.on("connection", (socket) => {
   console.log(`✅ [socket] connected: ${socket.id}`);
   chatHistories.set(socket.id, []);
+  // [수정] 로그 데이터에 rowNumber를 추가하여 초기화
+  chatLogs.set(socket.id, {
+    systemPrompt: defaultSystemPrompt,
+    startTime: new Date(),
+    rowNumber: null, // 아직 몇 번째 줄에 기록될지 모름
+  });
 
   // 'go' 버튼 클릭 시 대화 시작 (인사말 생성)
   socket.on("start-conversation", async (payload) => {

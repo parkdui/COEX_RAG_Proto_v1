@@ -51,7 +51,8 @@
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
       // 기본 백엔드 URL (Render/Railway 같은 고정 주소가 있으면 여기 넣기)
-      const DEFAULT_API = "https://4a3ca69675bb.ngrok-free.app"; // 임시: ngrok 주소 or 고정 백엔드 주소
+      // const DEFAULT_API = "https://4a3ca69675bb.ngrok-free.app"; // 임시: ngrok 주소 or 고정 백엔드 주소
+      const DEFAULT_API = "https://49a3df4cfe17.ngrok-free.app"; // 임시: ngrok 주소 or 고정 백엔드 주소
 
       // 편의기능: ?api= 로 오버라이드 가능 + localStorage 저장
       const urlApi = new URLSearchParams(location.search).get("api");
@@ -325,6 +326,10 @@
 
       // 모바일/엔터 전송
       q.addEventListener("keydown", (e) => {
+        // IME(입력기)가 글자를 조합하는 중에는 Enter 키로 인한 제출을 방지합니다.
+        if (e.isComposing) {
+          return;
+        }
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           form.requestSubmit();

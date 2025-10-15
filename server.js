@@ -369,14 +369,22 @@ async function callClovaChat(messages, opts = {}) {
   };
 }
 
-// [수정] 기존 appendToLogSheet 함수를 아래 코드로 전체 교체합니다.
-async function appendToLogSheet(socketId, messagesToLog) {
+async function logToSheet(socketId, messagesToLog) {
+  // messagesToLog가 유효한 배열인지 확인하는 방어 코드
+  if (!Array.isArray(messagesToLog) || messagesToLog.length === 0) {
+    console.error(
+      `[logToSheet Error] Invalid messages for socket ${socketId}. Must be a non-empty array.`
+    );
+    return;
+  }
+
   const credentials = {
     LOG_GOOGLE_SHEET_ID,
     LOG_GOOGLE_SHEET_NAME,
     GOOGLE_SERVICE_ACCOUNT_EMAIL,
     GOOGLE_PRIVATE_KEY,
   };
+
   if (Object.values(credentials).some((v) => !v)) {
     console.warn("[Google Sheets Log] Credentials not set. Skipping log.");
     return;
@@ -384,7 +392,11 @@ async function appendToLogSheet(socketId, messagesToLog) {
 
   try {
     const auth = new google.auth.GoogleAuth({
-      /* ... */
+      credentials: {
+        client_email: GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        private_key: GOOGLE_PRIVATE_KEY,
+      },
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
     });
     const sheets = google.sheets({ version: "v4", auth });
 
@@ -396,13 +408,10 @@ async function appendToLogSheet(socketId, messagesToLog) {
       // --- 업데이트 로직 ---
       // 이전에 기록된 메시지 수를 기반으로 시작 열을 계산 (C열이 2)
       // history.length는 현재 메시지까지 포함하므로 2를 빼서 이전 길이를 구함
-      const startColumnIndex = 2 + (history.length - messagesToLog.length);
-      const endColumnIndex = startColumnIndex + messagesToLog.length - 1;
-
+      const previousHistoryLength = history.length - messagesToLog.length;
+      const startColumnIndex = 2 + previousHistoryLength; // C열부터 시작
       const startColumn = columnIndexToLetter(startColumnIndex);
-      const endColumn = columnIndexToLetter(endColumnIndex);
-
-      const range = `${LOG_GOOGLE_SHEET_NAME}!${startColumn}${logData.rowNumber}:${endColumn}${logData.rowNumber}`;
+      const range = `${LOG_GOOGLE_SHEET_NAME}!${startColumn}${logData.rowNumber}`;
 
       await sheets.spreadsheets.values.update({
         spreadsheetId: LOG_GOOGLE_SHEET_ID,
@@ -415,7 +424,11 @@ async function appendToLogSheet(socketId, messagesToLog) {
       // --- 첫 기록 (Append) 로직 ---
       const timestamp = new Date()
         .toLocaleDateString("ko-KR", {
-          /* ... */
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
         })
         .replace(/ /g, "");
       const systemPrompt = logData ? logData.systemPrompt : defaultSystemPrompt;
@@ -442,45 +455,6 @@ async function appendToLogSheet(socketId, messagesToLog) {
     console.error("Error logging to Google Sheet:", error.message);
   }
 }
-// // [추가] 채팅 로그를 Google Sheet에 추가하는 함수
-// async function appendToLogSheet(rowData) {
-//   // 로그 시트 정보가 .env에 없으면 함수를 조용히 종료
-//   if (
-//     !LOG_GOOGLE_SHEET_ID ||
-//     !LOG_GOOGLE_SHEET_NAME ||
-//     !GOOGLE_SERVICE_ACCOUNT_EMAIL ||
-//     !GOOGLE_PRIVATE_KEY
-//   ) {
-//     console.warn(
-//       "[Google Sheets Log] Logging credentials not set in .env. Skipping log append."
-//     );
-//     return;
-//   }
-
-//   try {
-//     const auth = new google.auth.GoogleAuth({
-//       credentials: {
-//         client_email: GOOGLE_SERVICE_ACCOUNT_EMAIL,
-//         private_key: GOOGLE_PRIVATE_KEY,
-//       },
-//       // 읽기/쓰기 권한이 필요
-//       scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-//     });
-
-//     const sheets = google.sheets({ version: "v4", auth });
-//     await sheets.spreadsheets.values.append({
-//       spreadsheetId: LOG_GOOGLE_SHEET_ID,
-//       range: LOG_GOOGLE_SHEET_NAME, // 시트 이름! A1 표기법이 아님
-//       valueInputOption: "USER_ENTERED",
-//       resource: {
-//         values: [rowData], // rowData는 배열이어야 함. 예: ['val1', 'val2']
-//       },
-//     });
-//     console.log(`[Google Sheets Log] Successfully appended a row.`);
-//   } catch (error) {
-//     console.error("Error appending to Google Sheet:", error.message);
-//   }
-// }
 
 // [추가] Google Sheets 데이터 로더 함수
 async function loadDataFromGoogleSheet() {
@@ -866,29 +840,31 @@ io.on("connection", (socket) => {
       const cleanedAnswer = removeEmojiLikeExpressions(result.content);
 
       // 구글 시트 로깅 추가
-      const timestamp = new Date()
-        .toLocaleDateString("ko-KR", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-        .replace(/ /g, "");
+      // const timestamp = new Date()
+      //   .toLocaleDateString("ko-KR", {
+      //     year: "numeric",
+      //     month: "2-digit",
+      //     day: "2-digit",
+      //     hour: "2-digit",
+      //     minute: "2-digit",
+      //   })
+      //   .replace(/ /g, "");
 
       // 첫 로그에는 시스템 프롬프트와 생성된 인사말을 기록합니다.
       // 사용자 질문은 "안녕하세요."로 고정됩니다.
-      appendToLogSheet([
-        timestamp,
-        activeSystemPrompt,
-        "안녕하세요.",
-        // result.content,
-        cleanedAnswer,
-      ]);
+      // logToSheet([
+      //   timestamp,
+      //   activeSystemPrompt,
+      //   "안녕하세요.",
+      //   // result.content,
+      //   cleanedAnswer,
+      // ]);
 
       // 생성된 인사말을 대화 기록에 추가
-      // (사용자가 입력한 "안녕하세요."는 실제 입력이 아니므로 기록하지 않음)
+      pushHistory(socket.id, "user", "안녕하세요.");
       pushHistory(socket.id, "assistant", cleanedAnswer);
+
+      logToSheet(socket.id, ["안녕하세요.", cleanedAnswer]);
 
       // 클라이언트로 인사말 응답 전송
       socket.emit("reply", {
@@ -980,26 +956,28 @@ io.on("connection", (socket) => {
       const cleanedAnswer = removeEmojiLikeExpressions(result.content);
 
       // 6) 구글 시트 로깅
-      const isFirstMessage = prev.length === 0;
-      if (isFirstMessage) {
-        // "YYYY.MM.DD." 형식으로 날짜 생성
-        const timestamp = new Date()
-          .toLocaleDateString("ko-KR", {
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-          .replace(/ /g, "");
-        appendToLogSheet([timestamp, activeSystemPrompt, q, cleanedAnswer]);
-      } else {
-        appendToLogSheet(["", "", q, cleanedAnswer]);
-      }
+      // const isFirstMessage = prev.length === 0;
+      // if (isFirstMessage) {
+      //   // "YYYY.MM.DD." 형식으로 날짜 생성
+      //   const timestamp = new Date()
+      //     .toLocaleDateString("ko-KR", {
+      //       year: "numeric",
+      //       month: "2-digit",
+      //       day: "2-digit",
+      //       hour: "2-digit",
+      //       minute: "2-digit",
+      //     })
+      //     .replace(/ /g, "");
+      //   logToSheet([timestamp, activeSystemPrompt, q, cleanedAnswer]);
+      // } else {
+      //   logToSheet(["", "", q, cleanedAnswer]);
+      // }
 
       // 7) 히스토리 업데이트
       pushHistory(socket.id, "user", q);
       pushHistory(socket.id, "assistant", cleanedAnswer);
+
+      logToSheet(socket.id, [q, cleanedAnswer]);
 
       // 8) 응답 전송
       socket.emit("reply", {
@@ -1022,6 +1000,7 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     chatHistories.delete(socket.id);
+    chatLogs.delete(socket.id); // [추가] 이 줄을 추가해주세요.
     console.log(`❎ [socket] disconnected: ${socket.id}`);
   });
 });
